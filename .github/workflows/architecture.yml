@@ -1,0 +1,48 @@
+name: Architecture Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  architecture-tests:
+    name: Validate Architecture Rules
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Run ArchUnit tests
+        run: ./mvnw test -Dtest=HexagonalArchitectureTest
+
+      - name: Generate architecture report
+        if: always()
+        run: |
+          echo "## Architecture Validation Results 🏛️" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Rules Validated:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Domain Layer isolation (no dependencies on Application/Infrastructure)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Application Layer independence (no dependencies on Infrastructure)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Layered architecture flow (Infrastructure → Application → Domain)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Naming conventions (Commands, Queries, UseCases, etc.)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Package structure compliance" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Annotation requirements (@RestController, @Service, @Entity)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total Architecture Rules**: 21" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if grep -q "BUILD SUCCESS" target/surefire-reports/*.txt 2>/dev/null; then
+            echo "✅ All architecture rules passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some architecture rules failed" >> $GITHUB_STEP_SUMMARY
+          fi

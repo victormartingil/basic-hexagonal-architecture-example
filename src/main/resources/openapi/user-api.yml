@@ -1,0 +1,292 @@
+openapi: 3.0.3
+info:
+  title: Hexagonal Architecture User API
+  description: |
+    API for User management following Hexagonal Architecture principles.
+
+    This API demonstrates:
+    - API-First approach with OpenAPI specification
+    - CQRS pattern (Command Query Responsibility Segregation)
+    - RESTful best practices
+    - Clean error handling
+
+    Educational project for learning:
+    - Hexagonal Architecture (Ports & Adapters)
+    - Domain-Driven Design (DDD)
+    - Clean Code principles
+  version: 1.0.0
+  contact:
+    name: Hexagonal Architecture Project
+    url: https://github.com/example/hexarch
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server (example)
+
+tags:
+  - name: Users
+    description: User management operations (CRUD)
+
+paths:
+  /api/v1/users:
+    post:
+      tags:
+        - Users
+      summary: Create a new user
+      description: |
+        Creates a new user with the provided username and email.
+
+        **Command:** CreateUser (CQRS Write operation)
+
+        **Validation rules:**
+        - Username: 3-50 characters, required
+        - Email: valid email format, required
+
+        **Business rules:**
+        - Username must be unique
+        - Email must be unique
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+            examples:
+              valid:
+                summary: Valid user creation
+                value:
+                  username: "johndoe"
+                  email: "john@example.com"
+              invalid_username:
+                summary: Invalid username (too short)
+                value:
+                  username: "ab"
+                  email: "john@example.com"
+              invalid_email:
+                summary: Invalid email format
+                value:
+                  username: "johndoe"
+                  email: "invalid-email"
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+              examples:
+                created:
+                  summary: Successfully created user
+                  value:
+                    id: "550e8400-e29b-41d4-a716-446655440000"
+                    username: "johndoe"
+                    email: "john@example.com"
+                    enabled: true
+                    createdAt: "2024-01-15T10:30:00.123Z"
+        '400':
+          description: Bad Request - Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                validation_error:
+                  summary: Validation error
+                  value:
+                    status: 400
+                    error: "Validation Error"
+                    message: "Username debe tener al menos 3 caracteres"
+                    errorCode: "USER_002"
+                    timestamp: "2024-01-15T10:30:00"
+                    details: null
+        '409':
+          description: Conflict - User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                user_exists:
+                  summary: User already exists
+                  value:
+                    status: 409
+                    error: "Conflict"
+                    message: "User with username 'johndoe' already exists"
+                    errorCode: "USER_006"
+                    timestamp: "2024-01-15T10:30:00"
+                    details: null
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/users/{id}:
+    get:
+      tags:
+        - Users
+      summary: Get user by ID
+      description: |
+        Retrieves a user by their unique identifier.
+
+        **Query:** GetUser (CQRS Read operation)
+
+        Returns the complete user information including:
+        - ID (UUID)
+        - Username
+        - Email
+        - Enabled status
+        - Creation timestamp
+      operationId: getUser
+      parameters:
+        - name: id
+          in: path
+          description: User unique identifier (UUID)
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: User found successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+              examples:
+                found:
+                  summary: User found
+                  value:
+                    id: "550e8400-e29b-41d4-a716-446655440000"
+                    username: "johndoe"
+                    email: "john@example.com"
+                    enabled: true
+                    createdAt: "2024-01-15T10:30:00.123Z"
+        '404':
+          description: Not Found - User does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_found:
+                  summary: User not found
+                  value:
+                    status: 404
+                    error: "Not Found"
+                    message: "User with ID '550e8400-e29b-41d4-a716-446655440000' not found"
+                    errorCode: "USER_404"
+                    timestamp: "2024-01-15T10:30:00"
+                    details: null
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    CreateUserRequest:
+      type: object
+      description: Request body for creating a new user
+      required:
+        - username
+        - email
+      properties:
+        username:
+          type: string
+          description: Unique username for the user
+          minLength: 3
+          maxLength: 50
+          example: "johndoe"
+          pattern: '^[a-zA-Z0-9_-]+$'
+        email:
+          type: string
+          description: User's email address
+          format: email
+          maxLength: 100
+          example: "john@example.com"
+
+    UserResponse:
+      type: object
+      description: User information response
+      required:
+        - id
+        - username
+        - email
+        - enabled
+        - createdAt
+      properties:
+        id:
+          type: string
+          description: Unique identifier (UUID)
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        username:
+          type: string
+          description: User's username
+          example: "johndoe"
+        email:
+          type: string
+          description: User's email address
+          format: email
+          example: "john@example.com"
+        enabled:
+          type: boolean
+          description: Whether the user account is enabled
+          example: true
+        createdAt:
+          type: string
+          description: Account creation timestamp (ISO-8601 format, UTC)
+          format: date-time
+          example: "2024-01-15T10:30:00.123Z"
+
+    ErrorResponse:
+      type: object
+      description: Standard error response format
+      required:
+        - status
+        - error
+        - message
+        - errorCode
+        - timestamp
+      properties:
+        status:
+          type: integer
+          description: HTTP status code
+          example: 400
+        error:
+          type: string
+          description: Error type
+          example: "Validation Error"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Username debe tener al menos 3 caracteres"
+        errorCode:
+          type: string
+          description: Application-specific error code
+          example: "USER_002"
+        timestamp:
+          type: string
+          description: Error timestamp
+          format: date-time
+          example: "2024-01-15T10:30:00"
+        details:
+          type: object
+          description: Additional error details (optional)
+          nullable: true
+          additionalProperties:
+            type: string
+          example:
+            username: "Username is required"
+            email: "Email format is invalid"

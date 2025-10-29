@@ -1,0 +1,128 @@
+# ===================================================================
+# CONFIGURACIÓN DE LA APLICACIÓN
+# ===================================================================
+# Configuración para el proyecto hexarch con arquitectura hexagonal
+
+# ===================================================================
+# CONFIGURACIÓN DE LA APLICACIÓN
+# ===================================================================
+spring:
+  application:
+    name: hexarch
+
+  # ===================================================================
+  # CONFIGURACIÓN DE BASE DE DATOS - POSTGRESQL
+  # ===================================================================
+  datasource:
+    # URL de conexión a PostgreSQL
+    # Formato: jdbc:postgresql://host:port/database
+    url: jdbc:postgresql://localhost:5432/hexarch_db
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+
+    # Configuración de HikariCP (pool de conexiones)
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 20000
+      idle-timeout: 300000
+
+  # ===================================================================
+  # CONFIGURACIÓN DE JPA / HIBERNATE
+  # ===================================================================
+  jpa:
+    # Dialecto de PostgreSQL
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+    # NO crear/actualizar esquema automáticamente (usamos Flyway)
+    hibernate:
+      ddl-auto: validate
+
+    # Mostrar SQL en consola (útil para desarrollo, desactivar en producción)
+    show-sql: true
+
+    # Configuración adicional de Hibernate
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+
+  # ===================================================================
+  # CONFIGURACIÓN DE FLYWAY
+  # ===================================================================
+  flyway:
+    # Habilitar Flyway para migraciones de BD
+    enabled: true
+
+    # Ubicación de los scripts de migración
+    locations: classpath:db/migration
+
+    # Baseline on migrate: crea una versión base si la BD no está vacía
+    baseline-on-migrate: true
+
+    # Validar migraciones al iniciar
+    validate-on-migrate: true
+
+  # ===================================================================
+  # CONFIGURACIÓN DE JACKSON (JSON)
+  # ===================================================================
+  jackson:
+    # Instant se serializa automáticamente a formato ISO-8601 con UTC (ej: 2024-01-15T10:30:00.123Z)
+    # No necesitamos configuración especial para Instant
+
+    # Incluir solo propiedades no nulas en JSON
+    default-property-inclusion: non_null
+
+    serialization:
+      # Pretty print JSON (útil para desarrollo, desactivar en producción)
+      indent_output: true
+
+      # Serializar fechas como timestamps ISO-8601 (no como números)
+      write-dates-as-timestamps: false
+
+# ===================================================================
+# CONFIGURACIÓN DEL SERVIDOR
+# ===================================================================
+server:
+  port: 8080
+
+# ===================================================================
+# CONFIGURACIÓN DE LOGGING
+# ===================================================================
+logging:
+  # Nivel de log general
+  level:
+    root: INFO
+
+    # Nivel de log para nuestro paquete
+    com.example.hexarch: DEBUG
+
+    # Nivel de log para SQL (mostrar parámetros de queries)
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+    # Nivel de log para Spring
+    org.springframework.web: DEBUG
+
+  # Patrón de log
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+# ===================================================================
+# CONFIGURACIÓN DE ACTUATOR (Monitoreo)
+# ===================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        # Exponer endpoints de actuator
+        include: health,info,metrics
+
+  endpoint:
+    health:
+      # Mostrar detalles del health endpoint
+      show-details: always
