@@ -20,7 +20,8 @@
       "Bash(awk:*)",
       "Bash(./mvnw dependency:tree:*)",
       "Bash(yamllint:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(docker-compose ps:*)"
     ],
     "deny": [],
     "ask": []

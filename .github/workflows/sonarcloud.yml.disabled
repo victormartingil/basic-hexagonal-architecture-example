@@ -1,11 +1,17 @@
-name: SonarCloud Analysis
+name: SonarCloud Analysis (Disabled by default)
+
+# NOTA: Este workflow está deshabilitado por defecto porque requiere configuración de SonarCloud.
+# Para habilitarlo:
+# 1. Configura los secrets en GitHub: SONAR_TOKEN, SONAR_PROJECT_KEY, SONAR_ORGANIZATION
+# 2. Descomenta las líneas de 'push' y 'pull_request' a continuación
+# 3. El workflow se ejecutará automáticamente en cada push/PR
 
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main, develop ]
-  workflow_dispatch:
+  # push:
+  #   branches: [ main, develop ]
+  # pull_request:
+  #   branches: [ main, develop ]
+  workflow_dispatch:  # Permite ejecución manual desde GitHub Actions UI
 
 jobs:
   sonarcloud:

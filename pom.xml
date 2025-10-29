@@ -35,9 +35,11 @@
 
 		<!-- Code Quality -->
 		<jacoco.version>0.8.12</jacoco.version>
-		<sonar.organization>YOUR_SONAR_ORG</sonar.organization>
+		<!-- SonarCloud (OPCIONAL - Solo si lo configuras en GitHub Secrets) -->
+		<!-- Obtén estos valores de https://sonarcloud.io después de crear tu proyecto -->
+		<sonar.organization>tu-organizacion-sonarcloud</sonar.organization>
 		<sonar.host.url>https://sonarcloud.io</sonar.host.url>
-		<sonar.projectKey>YOUR_PROJECT_KEY</sonar.projectKey>
+		<sonar.projectKey>tu-usuario_nombre-proyecto</sonar.projectKey>
 
 		<!-- JaCoCo Configuration -->
 		<jacoco.coverage.minimum>0.80</jacoco.coverage.minimum>

@@ -1,14 +1,11 @@
 # Hexagonal Architecture - Proyecto Educativo Completo
 
-[![CI Tests](https://github.com/USERNAME/hexarch/actions/workflows/ci.yml/badge.svg)](https://github.com/USERNAME/hexarch/actions/workflows/ci.yml)
-[![Build](https://github.com/USERNAME/hexarch/actions/workflows/build.yml/badge.svg)](https://github.com/USERNAME/hexarch/actions/workflows/build.yml)
-[![Architecture](https://github.com/USERNAME/hexarch/actions/workflows/architecture.yml/badge.svg)](https://github.com/USERNAME/hexarch/actions/workflows/architecture.yml)
-[![SonarCloud](https://github.com/USERNAME/hexarch/actions/workflows/sonarcloud.yml/badge.svg)](https://github.com/USERNAME/hexarch/actions/workflows/sonarcloud.yml)
-[![Integration Tests](https://github.com/USERNAME/hexarch/actions/workflows/integration-tests.yml/badge.svg)](https://github.com/USERNAME/hexarch/actions/workflows/integration-tests.yml)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=YOUR_PROJECT_KEY&metric=alert_status)](https://sonarcloud.io/dashboard?id=YOUR_PROJECT_KEY)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=YOUR_PROJECT_KEY&metric=coverage)](https://sonarcloud.io/dashboard?id=YOUR_PROJECT_KEY)
+[![CI Tests](https://github.com/victormartingil/basic-hexagonal-architecture-example/actions/workflows/ci.yml/badge.svg)](https://github.com/victormartingil/basic-hexagonal-architecture-example/actions/workflows/ci.yml)
+[![Build](https://github.com/victormartingil/basic-hexagonal-architecture-example/actions/workflows/build.yml/badge.svg)](https://github.com/victormartingil/basic-hexagonal-architecture-example/actions/workflows/build.yml)
+[![Architecture](https://github.com/victormartingil/basic-hexagonal-architecture-example/actions/workflows/architecture.yml/badge.svg)](https://github.com/victormartingil/basic-hexagonal-architecture-example/actions/workflows/architecture.yml)
+[![Integration Tests](https://github.com/victormartingil/basic-hexagonal-architecture-example/actions/workflows/integration-tests.yml/badge.svg)](https://github.com/victormartingil/basic-hexagonal-architecture-example/actions/workflows/integration-tests.yml)
 
-> **Nota:** Reemplaza `USERNAME` con tu usuario de GitHub y `YOUR_PROJECT_KEY` con tu project key de SonarCloud para activar los badges.
+> **Nota:** Los badges de SonarCloud están deshabilitados por defecto. Ver sección "Code Quality" para configuración opcional.
 
 Proyecto de ejemplo que implementa **Arquitectura Hexagonal** (Ports & Adapters) con **CQRS** (Command Query Responsibility Segregation), demostrando flujos completos de **CreateUser** (Command) y **GetUser** (Query).
 
@@ -28,7 +25,7 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
 - **📊 Diagramas Mermaid**: Visualizaciones profesionales en las guías (GitHub-friendly)
 - **🎯 CQRS Completo**: Ejemplos de Commands (Write) y Queries (Read)
 - **📚 5000+ líneas de documentación**: Guías detalladas con ejemplos prácticos
-- **✅ 41 Tests**: Unit (10), Integration (10) y Architecture (21)
+- **✅ 54 Tests**: Unit (10), Integration (23) y Architecture (21)
 - **🚀 CI/CD con GitHub Actions**: 5 workflows automatizados para validación continua
 - **📊 Code Quality**: JaCoCo (cobertura 80%+) + SonarCloud (análisis continuo)
 - **🔧 Spring Boot 3.5**: Java 21, Records, Lombok, MapStruct
@@ -233,32 +230,31 @@ src/main/java/com/example/hexarch/
 - Docker (para PostgreSQL)
 - Maven (incluido con Maven Wrapper)
 
-### 1. Levantar PostgreSQL
+### 1. Levantar PostgreSQL con Docker Compose
+
+El proyecto incluye un `docker-compose.yml` para facilitar el setup:
 
 ```bash
-docker run --name hexarch-postgres \
-  -e POSTGRES_DB=hexarch_db \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  -p 5432:5432 \
-  -d postgres:16-alpine
-```
+# Levantar PostgreSQL en background
+docker-compose up -d
 
-**Verificar que PostgreSQL esté corriendo:**
-```bash
-docker ps | grep hexarch-postgres
+# Verificar que PostgreSQL esté corriendo
+docker-compose ps
 ```
 
 **Comandos útiles:**
 ```bash
-# Detener PostgreSQL
-docker stop hexarch-postgres
+# Ver logs de PostgreSQL
+docker-compose logs postgres
+
+# Detener PostgreSQL (mantiene los datos)
+docker-compose stop
 
 # Iniciar PostgreSQL (si ya existe)
-docker start hexarch-postgres
+docker-compose start
 
-# Ver logs de PostgreSQL
-docker logs hexarch-postgres
+# Detener y eliminar contenedores + volúmenes (limpia todo)
+docker-compose down -v
 ```
 
 ### 2. Compilar y Ejecutar
@@ -411,19 +407,33 @@ docker info
 ```
 
 **Qué prueban:**
-- ✅ Flujo HTTP completo (REST → Service → DB)
-- ✅ Serialización/Deserialización JSON
-- ✅ Validación Bean Validation
-- ✅ Persistencia real en PostgreSQL
-- ✅ Transacciones y rollbacks
-- ✅ Migraciones Flyway
+- ✅ **UserControllerIntegrationTest** (10 tests): Flujo HTTP completo (REST → Service → Repository → DB)
+  - Serialización/Deserialización JSON
+  - Validación Bean Validation
+  - Casos de error (400, 404, 409)
+  - CQRS: Commands y Queries
+
+- ✅ **JpaUserRepositoryAdapterIntegrationTest** (13 tests): Persistencia aislada (Repository → DB)
+  - Operaciones CRUD del adapter
+  - Mapping entre Domain y Entity
+  - Queries SQL y constraints
+  - Edge cases (case-sensitivity, múltiples usuarios)
+
+**¿Por qué tests del adapter por separado?**
+
+En arquitectura hexagonal profesional, es buena práctica probar cada adapter de forma aislada:
+
+1. **Aislamiento**: Si falla, sabes exactamente que el problema está en el adapter
+2. **Rapidez**: Tests más focalizados = debugging más rápido
+3. **Cobertura**: Puedes probar edge cases del repository difíciles de alcanzar desde el controller
+4. **Pirámide de Testing**: Muchos unit tests, algunos integration tests por adapter, pocos end-to-end
 
 **Output esperado:**
 ```
 [Testcontainers] 🐳 Starting PostgreSQL container...
 [Testcontainers] ✅ PostgreSQL container started: postgresql:16-alpine
 ...
-Tests run: 41, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 54, Failures: 0, Errors: 0, Skipped: 0
 [INFO] BUILD SUCCESS
 ```
 
@@ -451,22 +461,25 @@ docker pull postgres:16-alpine
 | `./mvnw test -Dtest=HexagonalArchitectureTest` | Solo Architecture (21 tests) | ❌ No | Validar arquitectura |
 | `./mvnw test -Dtest=CreateUserServiceTest` | Solo CreateUser unit (6 tests) | ❌ No | Test específico |
 | `./mvnw test -Dtest=GetUserServiceTest` | Solo GetUser unit (4 tests) | ❌ No | Test específico |
-| `./mvnw test -Pintegration-tests` | **Todos** (Unit + Integration + Architecture, 41 tests) | ✅ Sí | Validación completa |
+| `./mvnw test -Pintegration-tests` | **Todos** (Unit + Integration + Architecture, 54 tests) | ✅ Sí | Validación completa |
+| `./mvnw test -Pintegration-tests -Dtest=*IntegrationTest` | Solo Integration (23 tests) | ✅ Sí | Tests de integración |
 | `./mvnw clean install` | Unit + Architecture (31 tests) | ❌ No | Build sin Docker |
-| `./mvnw clean install -Pintegration-tests` | Todos los tests (41 tests) | ✅ Sí | Build completo |
+| `./mvnw clean install -Pintegration-tests` | Todos los tests (54 tests) | ✅ Sí | Build completo |
 
 **Desglose de tests:**
 - **Unit Tests**: 10 tests (CreateUserService: 6, GetUserService: 4)
 - **Architecture Tests**: 21 tests (ArchUnit)
-- **Integration Tests**: 10 tests (UserController endpoints con Testcontainers)
+- **Integration Tests**: 23 tests
+  - UserControllerIntegrationTest: 10 tests (flujo end-to-end HTTP → DB)
+  - JpaUserRepositoryAdapterIntegrationTest: 13 tests (adapter de persistencia aislado)
 
 ---
 
 ## 🚀 CI/CD con GitHub Actions
 
-El proyecto incluye **5 workflows** automatizados que se ejecutan en GitHub Actions:
+El proyecto incluye **4 workflows principales** que se ejecutan automáticamente:
 
-### Workflows Configurados
+### Workflows Activos
 
 1. **🧪 CI Tests** (`ci.yml`)
    - Se ejecuta en cada push/PR
@@ -491,15 +504,16 @@ El proyecto incluye **5 workflows** automatizados que se ejecutan en GitHub Acti
      - Manualmente desde GitHub UI
      - En PRs hacia `main`
      - Semanalmente (lunes 3am)
-   - Todos los tests con Testcontainers (41 tests)
+   - Todos los tests con Testcontainers (54 tests)
    - Tiempo: ~3-5 minutos
 
-5. **📊 SonarCloud Analysis** (`sonarcloud.yml`)
-   - Se ejecuta en cada push/PR
-   - Análisis de calidad con SonarCloud
-   - Genera reporte de cobertura (JaCoCo)
-   - Verifica Quality Gate
-   - Tiempo: ~2-3 minutos
+### Workflow Opcional (Deshabilitado)
+
+5. **📊 SonarCloud Analysis** (`sonarcloud.yml.disabled`) - **OPCIONAL**
+   - ❌ Deshabilitado por defecto
+   - Requiere cuenta gratuita en SonarCloud
+   - Requiere configuración de secrets
+   - Ver [`SONARCLOUD_SETUP.md`](.github/workflows/SONARCLOUD_SETUP.md) para habilitarlo
 
 ### Estrategia de CI/CD
 
@@ -509,7 +523,6 @@ Pull Request → main/develop
 ├─→ ✅ CI Tests (Unit + Architecture)
 ├─→ ✅ Build (Verifica compilación)
 ├─→ ✅ Architecture (Valida reglas)
-├─→ ✅ SonarCloud (Quality Gate)
 └─→ ✅ Integration Tests (Solo en PRs a main)
 ```
 
@@ -534,18 +547,19 @@ Pull Request → main/develop
 Ver [`.github/workflows/README.md`](.github/workflows/README.md) para:
 - Detalles de cada workflow
 - Configuración de badges personalizados
+- Cómo habilitar SonarCloud (opcional)
 - Troubleshooting común
 - Mejoras futuras
 
 ---
 
-## 📊 Code Quality: JaCoCo + SonarQube
+## 📊 Code Quality: JaCoCo + SonarCloud (Opcional)
 
 El proyecto incluye herramientas de análisis de calidad de código:
 
-### JaCoCo - Code Coverage
+### JaCoCo - Code Coverage (Incluido)
 
-Mide qué porcentaje del código está cubierto por tests.
+Mide qué porcentaje del código está cubierto por tests. **Funciona localmente sin configuración adicional**.
 
 **Ejecutar localmente:**
 ```bash
@@ -566,27 +580,45 @@ open target/site/jacoco/index.html
 - JPA Entities (solo mapeo DB)
 - Clases de configuración
 
-### SonarQube / SonarCloud
+### SonarCloud - Análisis Continuo (OPCIONAL)
 
-Analiza calidad del código detectando bugs, vulnerabilities y code smells.
+> **⚠️ NOTA:** SonarCloud es **OPCIONAL** para el aprendizaje. Requiere cuenta gratuita pero es el estándar en empresas grandes.
 
-**Setup rápido:**
-1. Crear cuenta en [SonarCloud](https://sonarcloud.io)
-2. Añadir secrets en GitHub:
-   - `SONAR_TOKEN`
+**¿Qué es SonarCloud?**
+Analiza calidad del código detectando bugs, vulnerabilities y code smells. En empresas profesionales es estándar para:
+- Code reviews automatizados
+- Detectar problemas de seguridad
+- Mantener estándares de código
+- Tracking de deuda técnica
+
+**¿Cuándo configurarlo?**
+- ✅ Si quieres aprender herramientas empresariales
+- ✅ Si vas a hacer el proyecto público en GitHub
+- ✅ Si quieres mostrar métricas de calidad en tu portfolio
+- ❌ NO es necesario para aprender arquitectura hexagonal
+
+**Setup (Requiere cuenta gratuita en SonarCloud):**
+
+1. Crear cuenta en [SonarCloud](https://sonarcloud.io) (gratis para proyectos open source)
+2. Importar tu repositorio de GitHub
+3. Obtener el token y project key
+4. Añadir secrets en GitHub:
+   - `SONAR_TOKEN` (Settings → Secrets → Actions)
    - `SONAR_PROJECT_KEY`
    - `SONAR_ORGANIZATION`
-3. Actualizar `pom.xml` con tus valores
+5. Descomentar el workflow `.github/workflows/sonarcloud.yml`
+6. Actualizar badges en el README
 
-**Ejecutar localmente:**
+**Ejecutar localmente (opcional):**
 ```bash
-# Análisis completo
+# Análisis completo (reemplaza <tu-token> con tu token de SonarCloud)
 ./mvnw clean verify sonar:sonar \
-  -Dsonar.token=YOUR_TOKEN
+  -Dsonar.token=<tu-token>
 ```
 
-**Workflow automático:**
-- Se ejecuta en cada push/PR
+**Workflow automático (si está habilitado):**
+- Por defecto está **DESHABILITADO** (archivo `.yml.disabled`)
+- Si lo habilitas, se ejecuta en cada push/PR
 - Verifica Quality Gate
 - Genera reporte en SonarCloud dashboard
 
@@ -721,16 +753,6 @@ Los logs muestran:
 - Errores detallados
 
 Configura el nivel en `application.yaml`.
-
----
-
-## 🤝 Contribuir
-
-Este es un proyecto educativo. Siéntete libre de:
-- Agregar más casos de uso (GetUser, UpdateUser, DeleteUser)
-- Implementar paginación
-- Agregar más validaciones
-- Mejorar los tests
 
 ---
 

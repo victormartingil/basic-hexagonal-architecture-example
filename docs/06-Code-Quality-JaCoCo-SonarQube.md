@@ -213,7 +213,16 @@ El reporte HTML muestra:
 
 ---
 
-## 🔍 SonarQube / SonarCloud
+## 🔍 SonarQube / SonarCloud (OPCIONAL)
+
+> **⚠️ NOTA IMPORTANTE**
+>
+> **SonarCloud es OPCIONAL** para este proyecto educativo. El workflow está **DESHABILITADO por defecto**.
+>
+> - ✅ JaCoCo (incluido) ya proporciona análisis de cobertura local
+> - ✅ NO es necesario para aprender arquitectura hexagonal
+> - ✅ Requiere cuenta gratuita + configuración de secrets
+> - ✅ Ver [SONARCLOUD_SETUP.md](../.github/workflows/SONARCLOUD_SETUP.md) para habilitarlo
 
 ### ¿Qué es SonarQube?
 
@@ -226,7 +235,20 @@ El reporte HTML muestra:
 
 **SonarCloud** = SonarQube en la nube (gratis para proyectos open source)
 
-### Setup de SonarCloud (GitHub)
+### ¿Cuándo usar SonarCloud?
+
+**✅ SÍ, si quieres:**
+- Aprender herramientas empresariales profesionales
+- Mostrar métricas de calidad en tu portfolio
+- Análisis automático en cada PR/push
+- Detectar problemas de seguridad automáticamente
+
+**❌ NO necesario si:**
+- Solo quieres aprender arquitectura hexagonal
+- No quieres configurar cuenta externa
+- JaCoCo local es suficiente para tu caso
+
+### Setup de SonarCloud (GitHub) - OPCIONAL
 
 #### Paso 1: Crear Cuenta en SonarCloud
 

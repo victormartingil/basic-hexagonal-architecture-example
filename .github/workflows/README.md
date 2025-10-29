@@ -2,7 +2,22 @@
 
 Este directorio contiene los workflows de CI/CD para el proyecto.
 
-## Workflows Disponibles
+## Workflows Activos
+
+El proyecto incluye **4 workflows principales** que se ejecutan automáticamente:
+
+1. 🧪 **CI Tests** - Tests unitarios y de arquitectura (rápido, sin Docker)
+2. 🏗️ **Build** - Compilación y generación de JAR
+3. 🏛️ **Architecture** - Validación de reglas arquitecturales con ArchUnit
+4. 🐳 **Integration Tests** - Tests de integración con Testcontainers
+
+## Workflows Opcionales
+
+5. 📊 **SonarCloud** - Análisis de calidad (DESHABILITADO por defecto, requiere cuenta)
+
+---
+
+## Workflows Detallados
 
 ### 1. 🧪 CI - Unit & Architecture Tests (`ci.yml`)
 
@@ -88,37 +103,35 @@ Este directorio contiene los workflows de CI/CD para el proyecto.
 
 ---
 
-### 5. 📊 SonarCloud Analysis (`sonarcloud.yml`)
+### 5. 📊 SonarCloud Analysis (`sonarcloud.yml.disabled`) - OPCIONAL
 
-**Cuándo se ejecuta:**
-- Push a `main` o `develop`
-- Pull Requests hacia `main` o `develop`
-- Manualmente desde GitHub UI
+> **⚠️ WORKFLOW DESHABILITADO POR DEFECTO**
+>
+> Este workflow está deshabilitado porque requiere cuenta en SonarCloud y configuración de secrets.
+> Es **OPCIONAL** para aprender arquitectura hexagonal.
 
-**Qué hace:**
-- Ejecuta análisis de calidad de código con SonarCloud
-- Genera reporte de cobertura con JaCoCo
-- Detecta bugs, vulnerabilities y code smells
-- Verifica Quality Gate
-- Tiempo estimado: 2-3 minutos
+**Estado:** ❌ Deshabilitado (archivo renombrado a `.disabled`)
 
-**Badge:**
-```markdown
-![SonarCloud](https://github.com/USERNAME/REPO/actions/workflows/sonarcloud.yml/badge.svg)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=YOUR_PROJECT_KEY&metric=alert_status)](https://sonarcloud.io/dashboard?id=YOUR_PROJECT_KEY)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=YOUR_PROJECT_KEY&metric=coverage)](https://sonarcloud.io/dashboard?id=YOUR_PROJECT_KEY)
-```
+**¿Por qué está deshabilitado?**
+- Requiere cuenta gratuita en SonarCloud
+- Requiere configuración de secrets en GitHub
+- NO es necesario para aprender arquitectura hexagonal
+- JaCoCo (incluido) ya proporciona análisis de cobertura local
 
-**Requisitos:**
-1. Cuenta en SonarCloud (https://sonarcloud.io)
-2. Secrets configurados en GitHub:
-   - `SONAR_TOKEN`
-   - `SONAR_PROJECT_KEY`
-   - `SONAR_ORGANIZATION`
-3. Actualizar valores en `pom.xml`
+**¿Cuándo habilitarlo?**
+- ✅ Si quieres aprender herramientas empresariales
+- ✅ Si quieres mostrar métricas en tu portfolio
+- ✅ Si necesitas análisis automático de calidad en PRs
 
-**Ver resultados:**
-- Dashboard: https://sonarcloud.io/dashboard?id=YOUR_PROJECT_KEY
+**Cómo habilitarlo:**
+Ver guía completa en [`SONARCLOUD_SETUP.md`](SONARCLOUD_SETUP.md)
+
+**Resumen rápido:**
+1. Crear cuenta en https://sonarcloud.io
+2. Configurar secrets en GitHub (SONAR_TOKEN, etc.)
+3. Renombrar `sonarcloud.yml.disabled` → `sonarcloud.yml`
+4. Descomentar triggers en el workflow
+5. Push para activar
 
 ---
 
@@ -130,7 +143,6 @@ Cuando se crea un PR, se ejecutan automáticamente:
 - ✅ **CI Tests** (rápido, sin Docker)
 - ✅ **Build** (verifica que compile)
 - ✅ **Architecture** (valida reglas)
-- ✅ **SonarCloud** (análisis de calidad)
 - ✅ **Integration Tests** (solo PRs a `main`)
 
 ### Push a Main/Develop
@@ -139,7 +151,6 @@ En cada push se ejecutan:
 - ✅ **CI Tests**
 - ✅ **Build**
 - ✅ **Architecture**
-- ✅ **SonarCloud**
 
 ### Ejecución Manual
 
@@ -212,10 +223,27 @@ Si fallan, puede ser por:
 
 ---
 
+## Análisis de Calidad Alternativo (sin SonarCloud)
+
+Si prefieres análisis local sin cuenta:
+
+**JaCoCo** (ya incluido):
+```bash
+./mvnw clean test
+open target/site/jacoco/index.html
+```
+
+**Otras herramientas** (añadir al pom.xml):
+- SpotBugs: Detecta bugs comunes
+- PMD: Análisis de código estático
+- Checkstyle: Verificación de estilo de código
+
+---
+
 ## Mejoras Futuras
 
 - [ ] Añadir workflow de release automático
-- [ ] Integrar SonarQube para análisis de calidad
-- [ ] Añadir cobertura de tests con JaCoCo
 - [ ] Despliegue automático a staging/production
 - [ ] Notificaciones a Slack/Discord
+- [ ] Performance testing con JMeter/Gatling
+- [ ] Security scanning con Dependabot
