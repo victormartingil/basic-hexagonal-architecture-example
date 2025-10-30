@@ -21,10 +21,16 @@ import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 /**
- * UNIT TEST - EmailService con Circuit Breaker
+ * INTEGRATION TEST - EmailService con Circuit Breaker
  *
- * Test unitario para el servicio EmailService que demuestra el comportamiento
+ * Test de integración para el servicio EmailService que demuestra el comportamiento
  * del Circuit Breaker pattern usando Resilience4j.
+ *
+ * IMPORTANTE: Este es un test de INTEGRACIÓN porque:
+ * - Usa @SpringBootTest (levanta contexto completo de Spring)
+ * - Usa @Testcontainers (requiere Docker para PostgreSQL)
+ * - Se ejecuta solo con el perfil: ./mvnw test -Pintegration-tests
+ * - Excluido de ./mvnw test por defecto (por el sufijo IntegrationTest)
  *
  * CIRCUIT BREAKER TESTING:
  * - Estado CLOSED: El servicio funciona normalmente
@@ -41,6 +47,7 @@ import java.util.concurrent.TimeUnit;
  * FRAMEWORKS:
  * - JUnit 5: framework de testing
  * - Spring Boot Test: contexto de Spring
+ * - Testcontainers: PostgreSQL en Docker
  * - AssertJ: assertions fluidas
  * - Awaitility: esperas asíncronas
  */
@@ -53,8 +60,8 @@ import java.util.concurrent.TimeUnit;
         "resilience4j.circuitbreaker.instances.emailService.minimum-number-of-calls=5",
         "resilience4j.circuitbreaker.instances.emailService.failure-rate-threshold=50"
 })
-@DisplayName("EmailService - Circuit Breaker Tests")
-class EmailServiceTest {
+@DisplayName("EmailService - Circuit Breaker Integration Tests")
+class EmailServiceIntegrationTest {
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")

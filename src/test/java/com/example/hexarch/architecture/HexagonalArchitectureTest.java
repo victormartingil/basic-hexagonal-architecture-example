@@ -156,12 +156,12 @@ class HexagonalArchitectureTest {
     class InfrastructureLayerRules {
 
         @Test
-        @DisplayName("Controllers deben estar en el paquete input.rest")
+        @DisplayName("Controllers deben estar en el paquete input.rest (o subdirectorios)")
         void controllersShouldBeInInputRestPackage() {
             ArchRule rule = classes()
                 .that().haveSimpleNameEndingWith("Controller")
-                .should().resideInAPackage("..infrastructure.adapter.input.rest")
-                .because("Controllers son Input Adapters y deben estar en el paquete correcto");
+                .should().resideInAPackage("..infrastructure.adapter.input.rest..")
+                .because("Controllers son Input Adapters y deben estar en el paquete correcto (permite subdirectorios)");
 
             rule.check(importedClasses);
         }

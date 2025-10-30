@@ -1,0 +1,53 @@
+# ===================================================================
+# PROFILE: LOCAL (Desarrollo local)
+# ===================================================================
+# Activar con: spring.profiles.active=local
+# O con variable de entorno: SPRING_PROFILES_ACTIVE=local
+#
+# CARACTERÍSTICAS:
+# - Logs verbosos (DEBUG level)
+# - SQL visible en consola
+# - Tracing al 100%
+# - Pretty print JSON
+# - CORS permisivo (localhost)
+# - Base de datos local
+
+spring:
+  # ===================================================================
+  # CONFIGURACIÓN DE LOGGING - LOCAL
+  # ===================================================================
+  logging:
+    level:
+      root: INFO
+      com.example.hexarch: DEBUG  # Logs detallados de nuestra aplicación
+      org.hibernate.SQL: DEBUG    # Ver SQL queries
+      org.hibernate.type.descriptor.sql.BasicBinder: TRACE  # Ver parámetros de SQL
+      org.springframework.web: DEBUG  # Ver requests/responses
+
+  # ===================================================================
+  # CONFIGURACIÓN DE JACKSON - LOCAL
+  # ===================================================================
+  jackson:
+    serialization:
+      indent_output: true  # JSON formateado (más legible)
+
+# ===================================================================
+# CONFIGURACIÓN DE OBSERVABILIDAD - LOCAL
+# ===================================================================
+management:
+  tracing:
+    sampling:
+      probability: 1.0  # 100% de requests traced (útil para desarrollo)
+
+  # Exponer todos los endpoints de actuator para debugging
+  endpoints:
+    web:
+      exposure:
+        include: "*"  # Todos los endpoints (health, metrics, prometheus, etc.)
+
+# ===================================================================
+# CONFIGURACIÓN DE CORS - LOCAL
+# ===================================================================
+cors:
+  # Permitir localhost en puertos comunes de frameworks frontend
+  allowed-origins: http://localhost:3000,http://localhost:4200,http://localhost:8081,http://localhost:5173

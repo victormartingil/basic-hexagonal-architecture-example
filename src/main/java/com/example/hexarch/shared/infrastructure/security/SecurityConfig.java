@@ -133,6 +133,9 @@ public class SecurityConfig {
                         // Actuator health endpoint (para healthchecks de K8s, Docker, etc.)
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
 
+                        // Auth endpoint (login para obtener JWT)
+                        .requestMatchers("/api/v1/auth/**").permitAll()
+
                         // Swagger UI (para este proyecto educativo)
                         // En producción, proteger con autenticación
                         .requestMatchers(

@@ -24,15 +24,26 @@ docker-compose up -d
 # 3. Compilar y ejecutar la aplicación
 ./mvnw spring-boot:run
 
-# 4. En otra terminal, crear tu primer usuario
+# 4. En otra terminal, generar un JWT token
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "johndoe", "role": "ADMIN"}' \
+  | jq -r '.token'
+
+# Guarda el token en una variable (reemplaza YOUR_TOKEN_HERE con el token de arriba)
+export TOKEN="YOUR_TOKEN_HERE"
+
+# 5. Crear tu primer usuario (usando el token JWT)
 curl -X POST http://localhost:8080/api/v1/users \
   -H "Content-Type: application/json" \
-  -d '{"username": "johndoe", "email": "john@example.com"}'
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"username": "newuser", "email": "user@example.com"}'
 
-# 5. Obtener el usuario creado (reemplaza el ID con el que recibiste)
-curl -X GET http://localhost:8080/api/v1/users/{id}
+# 6. Obtener el usuario creado (reemplaza {id} con el UUID recibido)
+curl -X GET http://localhost:8080/api/v1/users/{id} \
+  -H "Authorization: Bearer $TOKEN"
 
-# 6. Ver Swagger UI (documentación interactiva)
+# 7. Ver Swagger UI (documentación interactiva)
 open http://localhost:8080/swagger-ui.html
 ```
 
@@ -728,12 +739,20 @@ docker-compose up -d
 # - Prometheus: http://localhost:9090
 # - Zipkin: http://localhost:9411
 
-# 4. Generar tráfico
+# 4. Generar tráfico (primero obtener JWT token)
+# Obtener token
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "role": "ADMIN"}' \
+  | jq -r '.token')
+
+# Crear usuarios
 curl -X POST http://localhost:8080/api/v1/users \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"username": "johndoe", "email": "john@example.com"}'
 
-# 5. Ver métricas
+# 5. Ver métricas (endpoint público, no requiere token)
 curl http://localhost:8080/actuator/prometheus | grep users_created
 ```
 
