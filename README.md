@@ -24,14 +24,17 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
 - **🏛️ ArchUnit Tests**: 21 tests que validan automáticamente las reglas arquitecturales
 - **📊 Diagramas Mermaid**: Visualizaciones profesionales en las guías (GitHub-friendly)
 - **🎯 CQRS Completo**: Ejemplos de Commands (Write) y Queries (Read)
-- **📡 Domain Events**: Spring Events (in-memory) + Kafka (integration events entre microservicios)
-- **📚 5000+ líneas de documentación**: Guías detalladas con ejemplos prácticos
-- **✅ 54 Tests**: Unit (10), Integration (23) y Architecture (21)
+- **📡 Domain Events**: Spring Events (in-memory) + Kafka (async integration events)
+- **🔄 Apache Kafka**: Producer/Consumer con reintentos y Dead Letter Topic (DLT)
+- **🛡️ Circuit Breaker**: Resilience4j para prevenir fallos en cascada (fallback automático)
+- **📚 6000+ líneas de documentación**: Guías detalladas con ejemplos prácticos
+- **✅ 73 Tests**: Unit (37), Integration (15) y Architecture (21)
+  - Kafka tests separados por Publisher/Consumer siguiendo best practices de microservicios
 - **🚀 CI/CD con GitHub Actions**: 5 workflows automatizados para validación continua
 - **📊 Code Quality**: JaCoCo (cobertura 80%+) + SonarCloud (análisis continuo)
 - **🔧 Spring Boot 3.5**: Java 21, Records, Lombok, MapStruct
 - **🐘 PostgreSQL + Flyway**: Migraciones de BD automáticas
-- **🐳 Testcontainers**: Integration tests con PostgreSQL real
+- **🐳 Testcontainers**: Integration tests con PostgreSQL y Embedded Kafka
 
 ## 📖 Guías Completas
 
@@ -50,6 +53,8 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
    - ¿Qué es DDD?
    - Building Blocks (Entity, Value Object, Aggregate, etc.)
    - **Domain Events vs Integration Events (Spring Events + Kafka)**
+   - **Circuit Breaker Pattern (Resilience4j)** - Estados, configuración, fallbacks
+   - Dead Letter Topic (DLT) - Manejo de mensajes fallidos en Kafka
    - Particiones, claves y ordenamiento en Kafka
    - Ejemplos prácticos con código del proyecto
    - Errores comunes
@@ -230,19 +235,24 @@ src/main/java/com/example/hexarch/
 ### Prerrequisitos
 
 - Java 21+
-- Docker (para PostgreSQL)
+- Docker (para PostgreSQL y Kafka)
 - Maven (incluido con Maven Wrapper)
 
-### 1. Levantar PostgreSQL con Docker Compose
+### 1. Levantar PostgreSQL y Kafka con Docker Compose
 
-El proyecto incluye un `docker-compose.yml` para facilitar el setup:
+El proyecto incluye un `docker-compose.yml` que levanta **PostgreSQL** y **Apache Kafka** (con Zookeeper):
 
 ```bash
-# Levantar PostgreSQL en background
+# Levantar todos los servicios en background
 docker-compose up -d
 
-# Verificar que PostgreSQL esté corriendo
+# Verificar que todos los servicios estén corriendo
 docker-compose ps
+
+# Deberías ver:
+# - postgres (Puerto 5432)
+# - zookeeper (Puerto 2181)
+# - kafka (Puerto 9092)
 ```
 
 **Comandos útiles:**
@@ -250,10 +260,16 @@ docker-compose ps
 # Ver logs de PostgreSQL
 docker-compose logs postgres
 
-# Detener PostgreSQL (mantiene los datos)
+# Ver logs de Kafka
+docker-compose logs kafka
+
+# Ver logs en tiempo real (follow)
+docker-compose logs -f postgres kafka
+
+# Detener todos los servicios (mantiene los datos)
 docker-compose stop
 
-# Iniciar PostgreSQL (si ya existe)
+# Iniciar todos los servicios (si ya existen)
 docker-compose start
 
 # Detener y eliminar contenedores + volúmenes (limpia todo)
@@ -410,26 +426,55 @@ Prueban la lógica de negocio de forma aislada con mocks:
 # Ejecutar solo unit tests (rápido, sin Docker)
 ./mvnw test
 
-# Ejecutar un test específico
+# Ejecutar tests específicos
 ./mvnw test -Dtest=CreateUserServiceTest
+./mvnw test -Dtest=EmailServiceTest
+./mvnw test -Dtest=KafkaUserEventPublisherAdapterTest
 ```
 
 **Qué prueban:**
-- Lógica de CreateUserService
+
+**User Service (10 tests):**
+- Lógica de CreateUserService (6 tests)
+- Lógica de GetUserService (4 tests)
 - Validaciones de dominio
 - Manejo de excepciones
 
+**Kafka Integration (27 tests):**
+- **EmailServiceTest** (7 tests): Circuit Breaker con Resilience4j
+  - Estados: CLOSED → OPEN → HALF_OPEN
+  - Transiciones automáticas
+  - Fallback execution
+  - Métricas y listeners
+- **KafkaUserEventPublisherAdapter** (6 tests): Publicación a Kafka
+  - Topic y key correctos
+  - Ordenamiento por userId
+  - Publicación asíncrona
+  - Manejo de errores
+- **UserEventsKafkaConsumer** (7 tests): Consumo de eventos
+  - Procesamiento exitoso
+  - Manejo de excepciones
+  - Orden de mensajes
+  - Null key handling
+- **UserCreatedEventDLTConsumer** (7 tests): Dead Letter Topic
+  - Procesamiento de mensajes fallidos
+  - Extracción de headers de error
+  - Manejo graceful sin reintentos
+
+**Total Unit Tests: 37 tests**
+
 ### 3. Integration Tests - Requieren Docker
 
-Prueban el flujo completo con **Testcontainers** (PostgreSQL real en contenedor).
+Prueban el flujo completo con **Testcontainers** (PostgreSQL y Embedded Kafka en contenedores).
 **IMPORTANTE:** Los integration tests están **desactivados por defecto** para permitir builds sin Docker.
 
 #### ¿Qué es Testcontainers?
 
 Testcontainers es una librería que levanta automáticamente contenedores Docker durante los tests:
 - 🐳 Inicia PostgreSQL en un contenedor efímero
+- ☕ Inicia Embedded Kafka (Spring Kafka Test)
 - 🧹 Limpia automáticamente después de los tests
-- 📦 Usa la imagen oficial de PostgreSQL
+- 📦 Usa imágenes oficiales (PostgreSQL, Kafka)
 - 🔒 Aislamiento total entre ejecuciones
 
 #### Prerequisito: Docker
@@ -460,6 +505,8 @@ docker info
 ```
 
 **Qué prueban:**
+
+**User Service (2 tests):**
 - ✅ **UserControllerIntegrationTest** (10 tests): Flujo HTTP completo (REST → Service → Repository → DB)
   - Serialización/Deserialización JSON
   - Validación Bean Validation
@@ -471,6 +518,35 @@ docker info
   - Mapping entre Domain y Entity
   - Queries SQL y constraints
   - Edge cases (case-sensitivity, múltiples usuarios)
+
+**Kafka Integration (15 tests) - Requiere Docker funcionando:**
+
+**BEST PRACTICE - Microservices Testing:**
+Los tests están separados para simular arquitectura de microservicios real:
+- **Publisher tests**: Testan "User Service" sin depender del Consumer (estaría en otro microservicio)
+- **Consumer tests**: Testan "Notifications Service" sin depender del Publisher (estaría en otro microservicio)
+
+- ✅ **KafkaPublisherIntegrationTest** (4 tests): Publisher aislado (User Service)
+  - Usa Publisher REAL + Test Consumer (NO Consumer de la app)
+  - Simula testear Publisher sin tener Consumer en mismo microservicio
+  - Topic y key correctos (userId para ordenamiento)
+  - Preservación de datos del evento
+  - Keys diferentes para usuarios diferentes
+
+- ✅ **KafkaConsumerIntegrationTest** (6 tests): Consumer aislado (Notifications Service)
+  - Usa KafkaTemplate para simular eventos de "User Service" + Consumer REAL
+  - NO usa Publisher de la app (estaría en otro microservicio)
+  - Consumo y procesamiento correcto
+  - Circuit Breaker con EmailService
+  - Múltiples eventos (orden, null key)
+
+- ✅ **KafkaDLTIntegrationTest** (5 tests): Dead Letter Topic con reintentos
+  - Usa KafkaTemplate para simular eventos de "User Service"
+  - Mensajes fallidos van al DLT después de reintentos
+  - Headers de error (topic, exception, stacktrace)
+  - DLT Consumer procesa sin reintentar
+  - Mensajes exitosos NO van al DLT
+  - Preservación de datos del evento
 
 **¿Por qué tests del adapter por separado?**
 
@@ -485,8 +561,10 @@ En arquitectura hexagonal profesional, es buena práctica probar cada adapter de
 ```
 [Testcontainers] 🐳 Starting PostgreSQL container...
 [Testcontainers] ✅ PostgreSQL container started: postgresql:16-alpine
+[EmbeddedKafka] 🚀 Starting Embedded Kafka broker...
+[EmbeddedKafka] ✅ Kafka broker started on localhost:9093
 ...
-Tests run: 54, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 58, Failures: 0, Errors: 0, Skipped: 0
 [INFO] BUILD SUCCESS
 ```
 
@@ -510,21 +588,25 @@ docker pull postgres:16-alpine
 
 | Comando | Tests Ejecutados | Requiere Docker | Uso |
 |---------|------------------|-----------------|-----|
-| `./mvnw test` | Unit + Architecture (31 tests) | ❌ No | Build rápido, CI/CD |
+| `./mvnw test` | Unit + Architecture (58 tests) | ❌ No | Build rápido, CI/CD |
 | `./mvnw test -Dtest=HexagonalArchitectureTest` | Solo Architecture (21 tests) | ❌ No | Validar arquitectura |
 | `./mvnw test -Dtest=CreateUserServiceTest` | Solo CreateUser unit (6 tests) | ❌ No | Test específico |
-| `./mvnw test -Dtest=GetUserServiceTest` | Solo GetUser unit (4 tests) | ❌ No | Test específico |
-| `./mvnw test -Pintegration-tests` | **Todos** (Unit + Integration + Architecture, 54 tests) | ✅ Sí | Validación completa |
-| `./mvnw test -Pintegration-tests -Dtest=*IntegrationTest` | Solo Integration (23 tests) | ✅ Sí | Tests de integración |
-| `./mvnw clean install` | Unit + Architecture (31 tests) | ❌ No | Build sin Docker |
-| `./mvnw clean install -Pintegration-tests` | Todos los tests (54 tests) | ✅ Sí | Build completo |
+| `./mvnw test -Dtest=EmailServiceTest` | Solo Circuit Breaker (7 tests) | ❌ No | Test específico |
+| `./mvnw test -Pintegration-tests` | **Todos** (Unit + Integration + Architecture, 73 tests) | ✅ Sí | Validación completa |
+| `./mvnw test -Pintegration-tests -Dtest=*IntegrationTest` | Solo Integration (15 tests) | ✅ Sí | Tests de integración |
+| `./mvnw clean install` | Unit + Architecture (58 tests) | ❌ No | Build sin Docker |
+| `./mvnw clean install -Pintegration-tests` | Todos los tests (73 tests) | ✅ Sí | Build completo |
 
 **Desglose de tests:**
-- **Unit Tests**: 10 tests (CreateUserService: 6, GetUserService: 4)
-- **Architecture Tests**: 21 tests (ArchUnit)
-- **Integration Tests**: 23 tests
-  - UserControllerIntegrationTest: 10 tests (flujo end-to-end HTTP → DB)
-  - JpaUserRepositoryAdapterIntegrationTest: 13 tests (adapter de persistencia aislado)
+- **Unit Tests**: 37 tests
+  - User Service: 10 tests (CreateUser: 6, GetUser: 4)
+  - Kafka: 27 tests (EmailService: 7, Publisher: 6, Consumer: 7, DLT: 7)
+- **Architecture Tests**: 21 tests (ArchUnit - validación de arquitectura hexagonal)
+- **Integration Tests**: 15 tests (requieren Docker funcionando)
+  - User Service: 2 test files (Controller: 10, Repository: 13 = 23 test cases)
+  - Kafka: 3 test files (Publisher: 4, Consumer: 6, DLT: 5 = 15 test cases)
+
+**Total: 73 tests (58 sin Docker + 15 con Docker)**
 
 ---
 
@@ -557,7 +639,7 @@ El proyecto incluye **4 workflows principales** que se ejecutan automáticamente
      - Manualmente desde GitHub UI
      - En PRs hacia `main`
      - Semanalmente (lunes 3am)
-   - Todos los tests con Testcontainers (54 tests)
+   - Todos los tests con Testcontainers (73 tests: Unit + Architecture + Integration)
    - Tiempo: ~3-5 minutos
 
 ### Workflow Opcional (Deshabilitado)
@@ -765,6 +847,107 @@ Infrastructure → Application → Domain
 El flujo de datos va: Infrastructure → Application → Domain → Application → Infrastructure
 
 Pero las **dependencias** apuntan hacia adentro.
+
+---
+
+## 🔄 Kafka + Circuit Breaker + DLT
+
+El proyecto implementa **comunicación asíncrona entre microservicios** usando **Apache Kafka** con patrones de resilencia empresariales:
+
+### 🚀 Flujo Completo
+
+```
+User Service                    Notifications Service
+     │                                  │
+     │  1. createUser()                 │
+     │                                  │
+     ├─→ 2. Publish UserCreatedEvent    │
+     │      ↓                            │
+     │    Kafka Topic                    │
+     │    "user.created"                 │
+     │      ↓                            │
+     │                          3. Consume Event
+     │                                  │
+     │                          4. EmailService
+     │                             (Circuit Breaker)
+     │                                  │
+     │                          ┌───────┴────────┐
+     │                          │                 │
+     │                    ✅ SUCCESS         ❌ FAILURE
+     │                       (Email sent)     (After 3 retries)
+     │                                              │
+     │                                              ↓
+     │                                     Dead Letter Topic
+     │                                     "user.created.dlt"
+     │                                              │
+     │                                              ↓
+     │                                     DLT Consumer
+     │                                     (Log for investigation)
+```
+
+### 📡 Kafka Producer/Consumer
+
+**Publisher (User Service):**
+- Publica `UserCreatedEvent` al topic `user.created`
+- Usa `userId` como key para garantizar orden (particionamiento)
+- Fire-and-forget: no bloquea el flujo principal
+
+**Consumer (Notifications Service):**
+- Consume eventos de `user.created`
+- Procesa llamando a `EmailService.sendWelcomeEmail()`
+- Protegido por Circuit Breaker (Resilience4j)
+
+### 🛡️ Circuit Breaker Pattern
+
+Previene fallos en cascada cuando servicios externos (ej: SMTP server) están caídos:
+
+**Estados:**
+- **CLOSED**: Funcionamiento normal
+- **OPEN**: Después de N fallos, rechaza llamadas inmediatamente
+- **HALF_OPEN**: Después de wait-duration, permite llamadas de prueba
+
+**Configuración:**
+```yaml
+resilience4j:
+  circuitbreaker:
+    instances:
+      emailService:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+```
+
+**Fallback automático:**
+```java
+// Si Circuit Breaker está OPEN, ejecuta:
+public void sendEmailFallback(String email, String username, Throwable ex) {
+    log.warn("Circuit breaker OPEN - Email no enviado a {}", email);
+    // Loguea error, puede encolar para retry manual
+}
+```
+
+### 💀 Dead Letter Topic (DLT)
+
+Maneja mensajes que fallan después de múltiples reintentos:
+
+**Flujo:**
+1. Mensaje falla en `user.created` consumer
+2. Spring Kafka reintenta automáticamente (ej: 3 intentos con backoff)
+3. Después de N fallos, envía al topic `user.created.dlt`
+4. DLT Consumer recibe mensaje con headers de error:
+   - `kafka_dlt-original-topic`: topic original
+   - `kafka_dlt-exception-message`: mensaje de error
+   - `kafka_dlt-exception-stacktrace`: stack trace completo
+5. DLT Consumer **loguea el error** para investigación manual
+
+**Beneficios:**
+- ✅ No pierde mensajes (persisten en DLT)
+- ✅ No bloquea la cola (eventos exitosos siguen procesándose)
+- ✅ Trazabilidad completa (headers con info del error)
+- ✅ Investigación posterior (puede reprocessarse manualmente)
+
+Ver **[docs/02-DDD-Guide.md](docs/02-DDD-Guide.md)** sección "Circuit Breaker" para detalles completos.
 
 ---
 

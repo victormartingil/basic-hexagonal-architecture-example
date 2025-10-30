@@ -142,41 +142,27 @@ class EmailServiceTest {
      * TEST CASE 4: Circuit debe transicionar a HALF_OPEN después de wait-duration
      *
      * GIVEN: Circuit breaker en estado OPEN
-     * WHEN: Se espera el wait-duration (1s en config de test)
-     * THEN: La siguiente llamada debe transicionar a HALF_OPEN
+     * WHEN: Se espera el wait-duration (1s en config de test) y se hace una llamada
+     * THEN: El circuit debe transicionar a HALF_OPEN
      */
     @Test
     @DisplayName("Circuit breaker debe transicionar a HALF_OPEN después de wait-duration")
-    void shouldTransitionToHalfOpenAfterWaitDuration() {
+    void shouldTransitionToHalfOpenAfterWaitDuration() throws InterruptedException {
         // GIVEN - Forzar circuit a OPEN
         circuitBreaker.transitionToOpenState();
         assertThat(circuitBreaker.getState())
                 .isEqualTo(CircuitBreaker.State.OPEN);
 
-        // WHEN - Esperar wait-duration + margen (1s + 100ms)
-        await()
-                .atMost(1200, TimeUnit.MILLISECONDS)
-                .pollInterval(100, TimeUnit.MILLISECONDS)
-                .untilAsserted(() -> {
-                    // Intentar una llamada (fallará por circuit OPEN, pero después del wait-duration
-                    // debería transicionar a HALF_OPEN en el próximo intento)
-                    try {
-                        emailService.sendWelcomeEmail("test@test.com", "test");
-                    } catch (Exception e) {
-                        // Ignorar - esperamos que falle en OPEN
-                    }
-                });
+        // WHEN - Esperar wait-duration + margen (1s + 200ms para asegurar)
+        Thread.sleep(1200);
 
-        // THEN - Verificar que eventualmente transiciona a HALF_OPEN
-        // (puede tomar un intento adicional)
-        await()
-                .atMost(2, TimeUnit.SECONDS)
-                .pollInterval(100, TimeUnit.MILLISECONDS)
-                .untilAsserted(() -> {
-                    CircuitBreaker.State state = circuitBreaker.getState();
-                    assertThat(state)
-                            .isIn(CircuitBreaker.State.HALF_OPEN, CircuitBreaker.State.CLOSED);
-                });
+        // Hacer una llamada para que el circuit intente transicionar a HALF_OPEN
+        emailService.sendWelcomeEmail("test@test.com", "test");
+
+        // THEN - Verificar que transicionó a HALF_OPEN
+        // Después del wait-duration, la primera llamada debe transicionar a HALF_OPEN
+        assertThat(circuitBreaker.getState())
+                .isEqualTo(CircuitBreaker.State.HALF_OPEN);
     }
 
     /**
