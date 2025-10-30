@@ -344,3 +344,29 @@ jwt:
   # DEFAULT: 24 horas para este proyecto educativo
   # PRODUCTION: Reducir a 15-60 minutos
   expiration: ${JWT_EXPIRATION:86400000}  # Default: 24 horas
+
+# ===================================================================
+# CONFIGURACIÓN DE CORS (Cross-Origin Resource Sharing)
+# ===================================================================
+cors:
+  # Orígenes permitidos para requests CORS
+  # Configurable vía variable de entorno CORS_ALLOWED_ORIGINS
+  #
+  # DEVELOPMENT:
+  # Permisivo: permite localhost en puertos comunes de frameworks frontend
+  # - 3000: React (create-react-app), Next.js
+  # - 4200: Angular
+  # - 8081: Vue.js
+  #
+  # PRODUCTION:
+  # Restrictivo: solo dominios específicos de tu aplicación
+  # Ejemplos:
+  # - https://app.example.com
+  # - https://admin.example.com
+  #
+  # MULTIPLE ORIGINS:
+  # Separar por comas sin espacios:
+  # allowed-origins: https://app.example.com,https://admin.example.com
+  #
+  # ⚠️ NUNCA usar "*" (wildcard) en producción con credentials
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200,http://localhost:8081}

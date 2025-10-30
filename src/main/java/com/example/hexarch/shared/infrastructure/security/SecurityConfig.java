@@ -3,6 +3,7 @@ package com.example.hexarch.shared.infrastructure.security;
 import com.example.hexarch.shared.infrastructure.security.jwt.JwtAuthenticationEntryPoint;
 import com.example.hexarch.shared.infrastructure.security.jwt.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -13,6 +14,12 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * SECURITY CONFIGURATION - Configuración de Spring Security con JWT
@@ -82,6 +89,9 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
+    @Value("${cors.allowed-origins:http://localhost:3000,http://localhost:4200}")
+    private String allowedOrigins;
+
     /**
      * Configura la cadena de filtros de seguridad
      *
@@ -102,7 +112,10 @@ public class SecurityConfig {
                 // 1. Desactivar CSRF (no necesario con JWT en header)
                 .csrf(AbstractHttpConfigurer::disable)
 
-                // 2. Configurar manejo de excepciones
+                // 2. Configurar CORS (permitir requests desde frontend)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+
+                // 3. Configurar manejo de excepciones
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(jwtAuthenticationEntryPoint)
                 )
@@ -172,29 +185,47 @@ public class SecurityConfig {
      */
 
     /**
-     * NOTA IMPORTANTE - CORS:
+     * Configuración de CORS (Cross-Origin Resource Sharing)
      *
-     * Si tu frontend está en otro dominio (ej: React en localhost:3000),
-     * necesitas configurar CORS:
+     * CORS permite que aplicaciones frontend en otros dominios
+     * (ej: React en localhost:3000) puedan hacer requests a esta API.
      *
-     * ```java
-     * @Bean
-     * public CorsConfigurationSource corsConfigurationSource() {
-     *     CorsConfiguration configuration = new CorsConfiguration();
-     *     configuration.setAllowedOrigins(List.of("http://localhost:3000")); // Frontend
-     *     configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE"));
-     *     configuration.setAllowedHeaders(List.of("*"));
-     *     configuration.setAllowCredentials(true);
+     * CONFIGURACIÓN POR PROFILES:
+     * - Desarrollo: Permisivo (localhost:3000, localhost:4200, etc.)
+     * - Producción: Restrictivo (solo dominios específicos)
      *
-     *     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-     *     source.registerCorsConfiguration("/**", configuration);
-     *     return source;
-     * }
+     * Ver application.yaml para configurar:
+     * ```yaml
+     * cors:
+     *   allowed-origins: https://app.example.com,https://admin.example.com
      * ```
      *
-     * Luego añadir a HttpSecurity:
-     * ```java
-     * .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-     * ```
+     * @return CorsConfigurationSource configurado
      */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+
+        // Orígenes permitidos (configurables por profile)
+        configuration.setAllowedOrigins(Arrays.asList(this.allowedOrigins.split(",")));
+
+        // Métodos HTTP permitidos
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+
+        // Headers permitidos (incluye Authorization para JWT)
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
+
+        // Headers expuestos al cliente
+        configuration.setExposedHeaders(List.of("X-Total-Count", "Link"));
+
+        // Permitir credenciales (cookies, Authorization headers)
+        configuration.setAllowCredentials(true);
+
+        // Tiempo de caché de la respuesta preflight OPTIONS (en segundos)
+        configuration.setMaxAge(3600L); // 1 hora
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
 }
