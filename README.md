@@ -105,7 +105,7 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
 
 ### Guías de Calidad de Código
 
-7. **[07-Code-Quality-JaCoCo-SonarQube.md](docs/07-Code-Quality-JaCoCo-SonarQube.md)** - Code Quality y Testing
+7. **[12-Code-Quality-JaCoCo-SonarQube.md](docs/12-Code-Quality-JaCoCo-SonarQube.md)** - Code Quality y Testing
    - ✅ JaCoCo: Cómo funciona y cómo medir cobertura
    - ✅ SonarQube/SonarCloud: Setup completo paso a paso
    - ✅ Exclusiones: Qué excluir y por qué
@@ -184,7 +184,7 @@ Aplica seguridad y autenticación en microservicios.
 #### **Fase 4: Calidad de Código** (1-2 horas)
 Mide y asegura la calidad del código.
 
-7. **[07-Code-Quality-JaCoCo-SonarQube.md](docs/07-Code-Quality-JaCoCo-SonarQube.md)** - _Tiempo: 1-1.5h_
+7. **[12-Code-Quality-JaCoCo-SonarQube.md](docs/12-Code-Quality-JaCoCo-SonarQube.md)** - _Tiempo: 1-1.5h_
    - JaCoCo: Cobertura de tests (85%+ required)
    - SonarQube: Análisis estático de código
    - **Acción**: Ejecutar `./mvnw clean verify`, revisar reportes
@@ -288,10 +288,121 @@ El código sigue estándares de **empresas Fortune 500**:
    - ✅ Dead Letter Topic para eventos fallidos
    - ✅ Retry con backoff exponencial
 
-6. **Observabilidad**:
-   - ✅ Logs estructurados (SLF4J + Logback)
-   - ✅ Spring Actuator para health checks
-   - ✅ Métricas de código (SonarQube)
+6. **Observabilidad Completa** (Los 3 Pilares):
+   - ✅ **Logs**: Estructurados con Correlation ID + Trace ID (SLF4J + Logback)
+   - ✅ **Métricas**: Prometheus + Grafana + métricas customizadas de negocio
+   - ✅ **Trazas**: Distributed tracing con Zipkin + Micrometer
+   - ✅ Spring Actuator (health, metrics, prometheus)
+   - 📖 **Guía completa**: [docs/07-Monitoring-Observability.md](docs/07-Monitoring-Observability.md)
+
+---
+
+## 📊 Observabilidad: Monitorizar la Aplicación
+
+### ¿Qué es Observabilidad?
+
+La observabilidad te permite **entender qué está pasando** dentro de tu aplicación en producción mediante **3 pilares**:
+
+#### 1️⃣ **LOGS** 📝 - ¿Qué pasó?
+Eventos discretos con timestamp que describen acciones:
+```
+2024-01-15 10:30:00 [f47ac10b,1a2b3c4d] 550e8400 INFO - User created: userId=123
+│                   │           │        │     │
+Timestamp           TraceId     SpanId   CorrId Level → Message
+```
+
+**Cuándo usar cada nivel**:
+- `INFO` → Eventos de negocio importantes (usuario creado, pedido completado)
+- `WARN` → Problemas recuperables (reintentos, configuración subóptima)
+- `ERROR` → Errores críticos que requieren atención
+
+**Dónde ver logs**:
+- 🖥️ **Desarrollo**: Consola (stdout)
+- 🏢 **Producción**: Grafana Loki (recomendado) o ELK Stack (Kibana)
+
+#### 2️⃣ **MÉTRICAS** 📈 - ¿Cómo está funcionando?
+Valores numéricos agregados en el tiempo:
+
+| Métrica | Tipo | Ejemplo |
+|---------|------|---------|
+| `users.created.total` | Counter | Total usuarios creados |
+| `http.server.requests.seconds` | Histogram | Latencia de requests |
+| `jvm.memory.used` | Gauge | Memoria JVM usada |
+
+**Dónde ver métricas**:
+```bash
+# Endpoint de Prometheus
+curl http://localhost:8080/actuator/prometheus
+
+# Dashboards en Grafana
+http://localhost:3000
+```
+
+#### 3️⃣ **TRAZAS DISTRIBUIDAS** 🔗 - ¿Dónde está el cuello de botella?
+Seguimiento de un request a través de múltiples servicios:
+```
+POST /api/v1/users (250ms total)
+  ├─ CreateUserUseCase (200ms)
+  │  ├─ PostgreSQL INSERT (40ms)
+  │  └─ Kafka publish (150ms) ← 60% del tiempo
+  └─ Response (10ms)
+```
+
+**Dónde ver traces**: Zipkin UI → `http://localhost:9411`
+
+---
+
+### 🚀 Setup Rápido de Observabilidad Local
+
+**1. Levantar stack completo** (Prometheus + Grafana + Loki + Zipkin):
+```bash
+docker-compose -f docker-compose-observability.yml up -d
+```
+
+**2. Ejecutar aplicación**:
+```bash
+./mvnw spring-boot:run
+```
+
+**3. Acceder a dashboards**:
+- **Grafana**: http://localhost:3000 (admin/admin)
+  - Métricas + Logs + Traces unificados
+- **Prometheus**: http://localhost:9090
+  - Queries PromQL
+- **Zipkin**: http://localhost:9411
+  - Distributed tracing
+
+**4. Generar tráfico** (probar endpoints):
+```bash
+# Crear usuario
+curl -X POST http://localhost:8080/api/v1/users \
+  -H "Content-Type: application/json" \
+  -d '{"username": "johndoe", "email": "john@example.com"}'
+
+# Ver métricas
+curl http://localhost:8080/actuator/prometheus | grep users_created
+```
+
+**5. Ver en Grafana**:
+- **Logs**: Explore → Datasource: Loki → Query: `{job="hexarch", level="INFO"}`
+- **Métricas**: Explore → Datasource: Prometheus → Query: `rate(http_server_requests_seconds_count[5m])`
+- **Traces**: Explore → Datasource: Zipkin → Buscar por traceId
+
+---
+
+### 📚 Documentación Completa de Observabilidad
+
+Para aprender en profundidad sobre logs, métricas y trazas:
+- **Guía completa**: [docs/07-Monitoring-Observability.md](docs/07-Monitoring-Observability.md)
+  - Los 3 pilares explicados
+  - Cuándo usar INFO/DEBUG/WARN/ERROR
+  - ELK vs Loki (comparativa)
+  - Setup de Grafana + Loki + Promtail
+  - Queries LogQL y PromQL
+  - Correlación Logs + Métricas + Traces
+  - Best practices de producción
+
+---
 
 ### 💡 Consejos de Aprendizaje
 

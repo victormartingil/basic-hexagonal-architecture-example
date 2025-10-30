@@ -1,0 +1,143 @@
+meta {
+  name: Prometheus
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/actuator/prometheus
+  body: none
+  auth: none
+}
+
+docs {
+  # Prometheus Metrics Endpoint
+
+  Returns application metrics in Prometheus exposition format (text/plain).
+  This endpoint is designed to be scraped by Prometheus for monitoring and alerting.
+
+  ## Prometheus Format
+  Prometheus uses a simple text-based format with the following structure:
+  ```
+  # HELP metric_name Description of the metric
+  # TYPE metric_name metric_type
+  metric_name{label1="value1",label2="value2"} numeric_value
+  ```
+
+  ## Metric Types
+  - **Counter**: Cumulative metric that only increases (e.g., `users_created_total`)
+  - **Gauge**: Metric that can go up and down (e.g., `jvm_memory_used_bytes`)
+  - **Histogram**: Samples observations and counts them in buckets (e.g., `http_server_requests_seconds`)
+  - **Summary**: Similar to histogram but calculates quantiles
+
+  ## Custom Business Metrics
+  This application exposes custom business metrics:
+
+  ### `users_created_total`
+  - **Type**: Counter
+  - **Description**: Total number of users created
+  - **Tags**: `status` (success/error), `environment` (local/dev/prod)
+  - **Location**: `CreateUserService.java:143-146`
+
+  Example:
+  ```
+  users_created_total{environment="local",status="success"} 5.0
+  ```
+
+  ## Standard Spring Boot Metrics
+  The endpoint also includes:
+  - **JVM Metrics**: `jvm_memory_used_bytes`, `jvm_gc_pause_seconds`, `jvm_threads_live`
+  - **HTTP Metrics**: `http_server_requests_seconds` (request duration by endpoint)
+  - **System Metrics**: `system_cpu_usage`, `process_uptime_seconds`
+  - **Database Metrics**: `hikaricp_connections_active`, `jdbc_connections_active`
+  - **Tomcat Metrics**: `tomcat_sessions_active_current`, `tomcat_threads_busy`
+
+  ## Testing Custom Metrics
+  To verify custom metrics are being recorded:
+
+  1. Create a few users using `POST /api/v1/users`
+  2. Call this endpoint
+  3. Search for `users_created_total` in the response
+  4. The value should match the number of successful user creations
+
+  ## Example Response
+  ```
+  # HELP users_created_total Total number of users created
+  # TYPE users_created_total counter
+  users_created_total{environment="local",status="success"} 3.0
+
+  # HELP jvm_memory_used_bytes The amount of used memory
+  # TYPE jvm_memory_used_bytes gauge
+  jvm_memory_used_bytes{area="heap",id="G1 Eden Space"} 4.5678592E7
+
+  # HELP http_server_requests_seconds Duration of HTTP server requests
+  # TYPE http_server_requests_seconds summary
+  http_server_requests_seconds_count{method="POST",uri="/api/v1/users",status="201"} 3.0
+  http_server_requests_seconds_sum{method="POST",uri="/api/v1/users",status="201"} 0.245
+  ```
+
+  ## Integration with Prometheus
+  To scrape this endpoint with Prometheus, add to `prometheus.yml`:
+  ```yaml
+  scrape_configs:
+    - job_name: 'hexarch'
+      metrics_path: '/actuator/prometheus'
+      static_configs:
+        - targets: ['localhost:8080']
+  ```
+
+  ## Visualizing in Grafana
+  Once Prometheus is scraping this endpoint, you can create dashboards in Grafana:
+  - **PromQL Query for User Creations**: `rate(users_created_total[5m])`
+  - **PromQL Query for Request Rate**: `rate(http_server_requests_seconds_count[5m])`
+  - **PromQL Query for Memory Usage**: `jvm_memory_used_bytes{area="heap"}`
+
+  ## Use Cases
+  - Monitoring application health and performance in real-time
+  - Setting up alerts based on thresholds (e.g., high error rate)
+  - Tracking business metrics (e.g., user creation rate)
+  - Capacity planning based on resource usage trends
+  - SLA/SLO tracking (uptime, response times, error rates)
+
+  ## Related Documentation
+  - 📖 [docs/07-Monitoring-Observability.md](../../../docs/07-Monitoring-Observability.md)
+  - 📖 README.md - Section "Observabilidad Completa"
+}
+
+tests {
+  test("Status code should be 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Content type should be text/plain", function() {
+    const contentType = res.getHeader('content-type');
+    expect(contentType).to.include('text/plain');
+  });
+
+  test("Response should contain custom business metrics", function() {
+    const body = res.getBody();
+    expect(body).to.include('users_created_total');
+  });
+
+  test("Response should contain JVM metrics", function() {
+    const body = res.getBody();
+    expect(body).to.include('jvm_memory_used_bytes');
+  });
+
+  test("Response should contain HTTP metrics", function() {
+    const body = res.getBody();
+    expect(body).to.include('http_server_requests_seconds');
+  });
+
+  test("Response should contain system metrics", function() {
+    const body = res.getBody();
+    expect(body).to.include('system_cpu_usage');
+  });
+
+  test("Metrics should be in Prometheus format", function() {
+    const body = res.getBody();
+    // Check for Prometheus format indicators
+    expect(body).to.match(/# HELP/);
+    expect(body).to.match(/# TYPE/);
+  });
+}

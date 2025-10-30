@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
 
 /**
  * UNIT TEST - CreateUserService
@@ -75,9 +76,9 @@ class CreateUserServiceTest {
      */
     @BeforeEach
     void setUp() {
-        // Mock del Counter de métricas
+        // Mock del Counter de métricas (lenient porque no todos los tests lo usan)
         Counter mockCounter = mock(Counter.class);
-        when(meterRegistry.counter(anyString(), anyString(), anyString(), anyString(), anyString()))
+        lenient().when(meterRegistry.counter(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(mockCounter);
 
         // Crear instancia del servicio manualmente (inyectando mocks)
@@ -212,10 +213,13 @@ class CreateUserServiceTest {
         // GIVEN - Command con username vacío
         CreateUserCommand invalidCommand = new CreateUserCommand("", "john@example.com");
 
+        // Mock para que pase la verificación inicial
         when(userRepository.existsByUsername("")).thenReturn(false);
         when(userRepository.existsByEmail("john@example.com")).thenReturn(false);
 
         // WHEN & THEN
+        // La excepción se lanza en User.create() (dominio), NO en el servicio
+        // Por lo tanto, los mocks de arriba SÍ se usan (se verifica existencia primero)
         assertThatThrownBy(() -> createUserService.execute(invalidCommand))
                 .isInstanceOf(ValidationException.class)
                 .hasMessageContaining("Username no puede estar vacío");

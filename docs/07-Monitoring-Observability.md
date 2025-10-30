@@ -6,6 +6,14 @@
 - [Logs: Cuándo usar cada nivel](#logs-cuándo-usar-cada-nivel)
 - [Métricas: Prometheus + Grafana](#métricas-prometheus--grafana)
 - [Trazas Distribuidas: Zipkin + Micrometer](#trazas-distribuidas-zipkin--micrometer)
+- [Propagación de TraceId/SpanId: Deep Dive](#propagación-de-traceidspanid-deep-dive) ⭐ **NUEVO**
+  - Cómo se genera el TraceId/SpanId
+  - Propagación en HTTP (W3C Trace Context)
+  - Propagación en Kafka (headers automáticos)
+  - Flujo End-to-End completo (POST /api/v1/users)
+  - Cómo buscar y analizar trazas en Zipkin UI
+  - Ejemplo práctico: Troubleshooting de errores
+  - Configuración de sampling para producción
 - [Correlation ID: Tracing de Negocio](#correlation-id-tracing-de-negocio)
 - [Setup Local](#setup-local)
 - [Ejemplos Prácticos en el Código](#ejemplos-prácticos-en-el-código)
@@ -753,6 +761,764 @@ public class ComplexBusinessLogic {
     }
 }
 ```
+
+---
+
+## Propagación de TraceId/SpanId: Deep Dive
+
+### **¿Cómo se Genera el TraceId y SpanId?**
+
+**Micrometer Tracing** (integrado con Spring Boot) genera automáticamente estos identificadores:
+
+| ID | Descripción | Formato | Ejemplo |
+|----|-------------|---------|---------|
+| **Trace ID** | Identificador único del request completo | 128-bit hex | `f47ac10b8c4211eb8dcd0242ac130003` |
+| **Span ID** | Identificador único de cada operación | 64-bit hex | `1a2b3c4d5e6f7890` |
+| **Parent Span ID** | ID del span padre (si existe) | 64-bit hex | `0a1b2c3d4e5f6789` |
+
+**Generación automática**:
+1. **Primer request** (sin header de tracing):
+   - Micrometer genera un **nuevo Trace ID** aleatorio
+   - Genera el **primer Span ID** (span raíz)
+   - Parent Span ID = null (es el span root)
+
+2. **Operaciones hijas** (dentro del mismo servicio):
+   - **Trace ID se mantiene** (mismo request)
+   - Se genera un **nuevo Span ID** para cada operación
+   - Parent Span ID = Span ID del padre
+
+3. **Llamadas entre servicios** (HTTP/Kafka):
+   - **Trace ID se propaga** (mismo request distribuido)
+   - Se genera un **nuevo Span ID** en el servicio destino
+   - Parent Span ID = Span ID del servicio origen
+
+---
+
+### **Propagación en HTTP (W3C Trace Context)**
+
+**Micrometer Tracing usa el estándar W3C Trace Context** para propagar trazas en HTTP.
+
+#### **Header: `traceparent`**
+
+Formato: `00-{trace-id}-{parent-id}-{trace-flags}`
+
+**Ejemplo real**:
+```http
+traceparent: 00-f47ac10b8c4211eb8dcd0242ac130003-1a2b3c4d5e6f7890-01
+             │  │                                │                │
+             │  Trace ID (128-bit)               Span ID (64-bit) Flags (01 = sampled)
+             Version (00)
+```
+
+**Flags**:
+- `01` = Sampled (se está trackeando este request)
+- `00` = Not sampled (no se trackea - ahorra overhead)
+
+#### **Header: `tracestate` (Opcional)**
+
+Formato: `vendor1=value1,vendor2=value2`
+
+**Ejemplo**:
+```http
+tracestate: zipkin=sampled,datadog=s:1;o:rum
+```
+
+Permite a cada vendor añadir su metadata custom.
+
+---
+
+### **Propagación en Kafka**
+
+**Micrometer Tracing propaga automáticamente el contexto en headers de Kafka**.
+
+#### **Headers de Kafka con Tracing**
+
+Cuando produces un mensaje a Kafka, Micrometer añade estos headers:
+
+| Header Key | Valor | Descripción |
+|------------|-------|-------------|
+| `traceparent` | `00-{trace-id}-{span-id}-01` | W3C Trace Context (mismo formato HTTP) |
+| `tracestate` | (opcional) | Vendor-specific metadata |
+| `X-B3-TraceId` | `{trace-id}` | Formato B3 (backward compatibility) |
+| `X-B3-SpanId` | `{span-id}` | Formato B3 |
+| `X-B3-ParentSpanId` | `{parent-span-id}` | Formato B3 |
+| `X-B3-Sampled` | `1` o `0` | Si está siendo sampled |
+
+**Ejemplo de headers en Kafka**:
+```
+traceparent: 00-f47ac10b8c4211eb8dcd0242ac130003-2b3c4d5e6f7a8b9c-01
+X-B3-TraceId: f47ac10b8c4211eb8dcd0242ac130003
+X-B3-SpanId: 2b3c4d5e6f7a8b9c
+X-B3-ParentSpanId: 1a2b3c4d5e6f7890
+X-B3-Sampled: 1
+```
+
+#### **Consumer Lee los Headers**
+
+Cuando el consumer recibe el mensaje:
+1. **Spring Kafka** lee automáticamente los headers de tracing
+2. **Micrometer Tracing** extrae el Trace ID y Span ID
+3. **Continúa la traza** en el consumer (mismo Trace ID)
+4. **Crea nuevo Span** para el procesamiento del consumer
+
+**NO necesitas código manual** - es automático ✅
+
+---
+
+### **Flujo End-to-End: POST /api/v1/users**
+
+Veamos cómo se propaga el traceId en un flujo completo de este proyecto:
+
+#### **Paso 1: Request HTTP al API**
+
+**Cliente**:
+```bash
+curl -X POST http://localhost:8080/api/v1/users \
+  -H "Content-Type: application/json" \
+  -d '{"username": "johndoe", "email": "john@example.com"}'
+```
+
+**Spring Boot recibe el request**:
+- ❓ ¿Tiene header `traceparent`? → NO (request nuevo)
+- ✅ **Micrometer genera Trace ID**: `f47ac10b8c4211eb8dcd0242ac130003`
+- ✅ **Span ID (HTTP)**: `1a2b3c4d5e6f7890`
+
+**Log en consola**:
+```
+2024-01-15 10:30:00 [f47ac10b8c4211eb8dcd0242ac130003,1a2b3c4d5e6f7890] INFO - Received POST /api/v1/users
+                    │                                       │
+                    Trace ID                                Span ID (HTTP span)
+```
+
+---
+
+#### **Paso 2: UserController → CreateUserService**
+
+**Código** (`UserController.java:42`):
+```java
+@PostMapping
+public ResponseEntity<UserResponse> createUser(@RequestBody @Valid CreateUserRequest request) {
+    // Trace ID se propaga automáticamente (ThreadLocal)
+    CreateUserCommand command = userRestMapper.toCommand(request);
+    UserResult result = createUserUseCase.execute(command);
+    return ResponseEntity.status(201).body(userRestMapper.toResponse(result));
+}
+```
+
+**Micrometer Tracing**:
+- Trace ID: `f47ac10b8c4211eb8dcd0242ac130003` (mismo)
+- **Nuevo Span ID**: `2b3c4d5e6f7a8b9c` (para el Service)
+- Parent Span ID: `1a2b3c4d5e6f7890` (el HTTP span)
+
+**Log en consola**:
+```
+2024-01-15 10:30:00 [f47ac10b8c4211eb8dcd0242ac130003,2b3c4d5e6f7a8b9c] INFO - Creating user: username=johndoe
+```
+
+---
+
+#### **Paso 3: CreateUserService → PostgreSQL**
+
+**Código** (`CreateUserService.java:119`):
+```java
+User user = User.create(command.username(), command.email());
+User savedUser = userRepository.save(user);  // ← Span automático de JPA
+```
+
+**Micrometer Tracing**:
+- Trace ID: `f47ac10b8c4211eb8dcd0242ac130003` (mismo)
+- **Nuevo Span ID**: `3c4d5e6f7a8b9cde` (para la query SQL)
+- Parent Span ID: `2b3c4d5e6f7a8b9c` (el Service span)
+
+**Query SQL ejecutada**:
+```sql
+INSERT INTO users (id, username, email, enabled, created_at)
+VALUES ('550e8400-...', 'johndoe', 'john@example.com', true, '2024-01-15 10:30:00')
+```
+
+**Span en Zipkin**:
+- Nombre: `INSERT users`
+- Duración: `40ms`
+- Tags: `db.system=postgresql`, `db.statement=INSERT INTO users...`
+
+---
+
+#### **Paso 4: CreateUserService → Kafka Producer**
+
+**Código** (`CreateUserService.java:138`):
+```java
+UserCreatedEvent event = UserCreatedEvent.from(
+    savedUser.getId(),
+    savedUser.getUsername().getValue(),
+    savedUser.getEmail().getValue()
+);
+userEventPublisher.publish(event);  // ← Span automático de Kafka
+```
+
+**Micrometer Tracing**:
+- Trace ID: `f47ac10b8c4211eb8dcd0242ac130003` (mismo)
+- **Nuevo Span ID**: `4d5e6f7a8b9cdef0` (para Kafka send)
+- Parent Span ID: `2b3c4d5e6f7a8b9c` (el Service span)
+
+**Headers de Kafka enviados**:
+```
+Key: 550e8400-e29b-41d4-a716-446655440000 (userId)
+Headers:
+  - traceparent: 00-f47ac10b8c4211eb8dcd0242ac130003-4d5e6f7a8b9cdef0-01
+  - X-B3-TraceId: f47ac10b8c4211eb8dcd0242ac130003
+  - X-B3-SpanId: 4d5e6f7a8b9cdef0
+  - X-B3-ParentSpanId: 2b3c4d5e6f7a8b9c
+  - X-B3-Sampled: 1
+```
+
+**Span en Zipkin**:
+- Nombre: `send user.created`
+- Duración: `150ms`
+- Tags: `messaging.system=kafka`, `messaging.destination=user.created`
+
+---
+
+#### **Paso 5: Kafka Consumer (Servicio de Notificaciones)**
+
+**Consumer recibe el mensaje** (`UserEventsKafkaConsumer.java:45`):
+
+```java
+@KafkaListener(topics = "user.created", groupId = "notifications-service")
+public void handleUserCreated(UserCreatedEvent event, @Header(KafkaHeaders.RECEIVED_KEY) String key) {
+    // Micrometer Tracing lee los headers automáticamente
+    log.info("Received UserCreatedEvent: userId={}", event.userId());
+    emailService.sendWelcomeEmail(event.email(), event.username());
+}
+```
+
+**Micrometer Tracing**:
+- Trace ID: `f47ac10b8c4211eb8dcd0242ac130003` (mismo - propagado desde Kafka headers)
+- **Nuevo Span ID**: `5e6f7a8b9cdef012` (para el consumer)
+- Parent Span ID: `4d5e6f7a8b9cdef0` (el Kafka producer span)
+
+**Log en consola**:
+```
+2024-01-15 10:30:00 [f47ac10b8c4211eb8dcd0242ac130003,5e6f7a8b9cdef012] INFO - Received UserCreatedEvent: userId=550e8400...
+```
+
+**Span en Zipkin**:
+- Nombre: `poll user.created`
+- Duración: `5ms`
+- Tags: `messaging.system=kafka`, `messaging.source=user.created`
+
+---
+
+#### **Paso 6: EmailService (con Circuit Breaker)**
+
+**Código** (`EmailService.java:25`):
+```java
+@CircuitBreaker(name = "emailService", fallbackMethod = "sendEmailFallback")
+public void sendWelcomeEmail(String email, String username) {
+    log.info("Sending welcome email to {}", email);
+    // Simulación de envío de email
+    // En producción: llamada a SendGrid, SES, etc.
+}
+```
+
+**Micrometer Tracing**:
+- Trace ID: `f47ac10b8c4211eb8dcd0242ac130003` (mismo)
+- **Nuevo Span ID**: `6f7a8b9cdef01234` (para el email send)
+- Parent Span ID: `5e6f7a8b9cdef012` (el consumer span)
+
+**Span en Zipkin**:
+- Nombre: `sendWelcomeEmail`
+- Duración: `100ms`
+- Tags: `email.recipient=john@example.com`, `circuit-breaker=emailService`
+
+---
+
+### **Visualización Completa en Zipkin**
+
+Cuando buscas el Trace ID `f47ac10b8c4211eb8dcd0242ac130003` en Zipkin, ves:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ Trace: f47ac10b8c4211eb8dcd0242ac130003                    Total: 295ms         │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│ ┌─ POST /api/v1/users ───────────────────────────────────────────── 295ms ────┐│
+│ │ Span ID: 1a2b3c4d5e6f7890                                                    ││
+│ │ Service: hexarch                                                              ││
+│ │ Tags: http.method=POST, http.status_code=201                                 ││
+│ │                                                                               ││
+│ │  ┌─ CreateUserService.execute() ──────────────────────────────── 290ms ────┐││
+│ │  │ Span ID: 2b3c4d5e6f7a8b9c                                                │││
+│ │  │ Service: hexarch                                                          │││
+│ │  │                                                                           │││
+│ │  │  ┌─ INSERT users ───────────────────────────────────────────── 40ms ───┐│││
+│ │  │  │ Span ID: 3c4d5e6f7a8b9cde                                            ││││
+│ │  │  │ Service: hexarch                                                      ││││
+│ │  │  │ Tags: db.system=postgresql, db.statement=INSERT INTO users...        ││││
+│ │  │  └───────────────────────────────────────────────────────────────────────┘│││
+│ │  │                                                                           │││
+│ │  │  ┌─ send user.created ──────────────────────────────────────── 150ms ──┐│││
+│ │  │  │ Span ID: 4d5e6f7a8b9cdef0                                            ││││
+│ │  │  │ Service: hexarch                                                      ││││
+│ │  │  │ Tags: messaging.system=kafka, messaging.destination=user.created     ││││
+│ │  │  └───────────────────────────────────────────────────────────────────────┘│││
+│ │  └───────────────────────────────────────────────────────────────────────────┘││
+│ │                                                                               ││
+│ │  ┌─ poll user.created ──────────────────────────────────────────── 105ms ──┐││
+│ │  │ Span ID: 5e6f7a8b9cdef012                                                │││
+│ │  │ Service: notifications-service                                            │││
+│ │  │ Tags: messaging.system=kafka, messaging.source=user.created              │││
+│ │  │                                                                           │││
+│ │  │  ┌─ sendWelcomeEmail ────────────────────────────────────────── 100ms ─┐│││
+│ │  │  │ Span ID: 6f7a8b9cdef01234                                            ││││
+│ │  │  │ Service: notifications-service                                        ││││
+│ │  │  │ Tags: email.recipient=john@example.com, circuit-breaker=emailService ││││
+│ │  │  └───────────────────────────────────────────────────────────────────────┘│││
+│ │  └───────────────────────────────────────────────────────────────────────────┘││
+│ └───────────────────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Análisis del Timeline**:
+- HTTP Request: `0ms - 295ms` (295ms total)
+- Service execution: `0ms - 290ms` (290ms)
+  - PostgreSQL INSERT: `0ms - 40ms` (40ms)
+  - Kafka send: `40ms - 190ms` (150ms) ← **60% del tiempo**
+- Kafka consumer: `190ms - 295ms` (105ms)
+  - Email send: `195ms - 295ms` (100ms) ← **95% del consumer**
+
+**Insights**:
+1. Kafka produce es el cuello de botella (150ms de 295ms = 51%)
+2. Email send también es lento (100ms)
+3. PostgreSQL es eficiente (40ms)
+
+---
+
+### **Cómo Buscar y Analizar Trazas en Zipkin UI**
+
+#### **1. Acceder a Zipkin**
+
+```bash
+# Levantar Zipkin con docker-compose
+docker-compose up -d zipkin
+
+# Acceder a Zipkin UI
+http://localhost:9411
+```
+
+---
+
+#### **2. Buscar Trazas por Criterio**
+
+**Filtros disponibles**:
+
+| Filtro | Descripción | Ejemplo |
+|--------|-------------|---------|
+| **Service Name** | Filtrar por servicio | `hexarch` |
+| **Span Name** | Filtrar por operación específica | `POST /api/v1/users` |
+| **Tags** | Buscar por tags custom | `http.status_code=500` |
+| **Duration** | Min/Max duración | `> 500ms` (encontrar lentos) |
+| **Limit** | Número de resultados | `10`, `50`, `100` |
+| **Lookback** | Ventana de tiempo | `Last hour`, `Last 15 minutes` |
+
+---
+
+#### **3. Buscar Errores (Status 5xx)**
+
+**Objetivo**: Encontrar todas las trazas con errores en las últimas 24 horas.
+
+**Pasos**:
+
+1. **Click en "Search"** (lupa arriba a la derecha)
+
+2. **Configurar filtros**:
+   ```
+   Service Name: hexarch
+   Tags: error=true
+   Lookback: 24 hours
+   Limit: 50
+   ```
+
+3. **Click en "Run Query"**
+
+4. **Resultado**: Lista de trazas ordenadas por timestamp
+
+**Ejemplo de traza con error**:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Trace: a1b2c3d4e5f67890 (ERROR)                  Total: 50ms     │
+├─────────────────────────────────────────────────────────────────┤
+│ ┌─ POST /api/v1/users ──────────────────────────── 50ms ───────┐│
+│ │ ERROR: UserAlreadyExistsException                             ││
+│ │ Tags: http.status_code=409, error=true                        ││
+│ │ Stack Trace:                                                  ││
+│ │   com.example.hexarch.user.domain.exception                   ││
+│ │     .UserAlreadyExistsException: Username 'johndoe' exists    ││
+│ │   at CreateUserService.execute(CreateUserService.java:108)    ││
+│ └───────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### **4. Buscar Trazas Lentas (Performance)**
+
+**Objetivo**: Encontrar requests que tardan más de 500ms.
+
+**Pasos**:
+
+1. **Click en "Search"**
+
+2. **Configurar filtros**:
+   ```
+   Service Name: hexarch
+   Min Duration: 500ms
+   Lookback: 1 hour
+   Limit: 20
+   ```
+
+3. **Click en "Run Query"**
+
+4. **Ordenar por duración** (columna "Duration")
+
+**Análisis**:
+- Click en una traza específica
+- Ver el timeline (waterfall chart)
+- Identificar el span más lento (barra más larga)
+- Ver tags del span para entender el contexto
+
+**Ejemplo**:
+```
+POST /api/v1/users - 1250ms
+  ├─ CreateUserService - 1245ms
+  │  ├─ PostgreSQL INSERT - 45ms  ✅ Normal
+  │  └─ Kafka send - 1200ms  ⚠️ SLOW! (96% del tiempo)
+```
+
+**Acción**: Investigar por qué Kafka tarda 1200ms (network issue? broker overloaded?)
+
+---
+
+#### **5. Buscar por Trace ID Específico**
+
+**Caso de uso**: Un usuario reporta un error y te da el Trace ID de su request.
+
+**Pasos**:
+
+1. **Click en "Search"**
+
+2. **Pegar Trace ID**:
+   ```
+   Trace ID: f47ac10b8c4211eb8dcd0242ac130003
+   ```
+
+3. **Click en "Run Query"**
+
+4. **Ver traza completa**:
+   - Timeline de todos los spans
+   - Latencias de cada operación
+   - Tags y annotations
+   - Logs asociados (si están configurados)
+
+---
+
+#### **6. Analizar Dependencies (Service Map)**
+
+**Objetivo**: Ver cómo se comunican los servicios entre sí.
+
+**Pasos**:
+
+1. **Click en "Dependencies"** (menú superior)
+
+2. **Seleccionar ventana de tiempo**:
+   ```
+   Lookback: Last hour
+   ```
+
+3. **Resultado**: Grafo de dependencias
+
+```
+┌─────────────┐
+│   hexarch   │
+└──────┬──────┘
+       │
+       ├──► PostgreSQL (40ms avg)
+       │
+       └──► Kafka (150ms avg)
+              │
+              └──► notifications-service
+                      │
+                      └──► EmailService (100ms avg)
+```
+
+**Insights**:
+- Latencia promedio entre servicios
+- Número de llamadas
+- Error rate por conexión
+- Cuellos de botella visuales
+
+---
+
+#### **7. Comparar Trazas (Before vs After Optimization)**
+
+**Caso de uso**: Optimizaste Kafka y quieres comparar el performance.
+
+**Pasos**:
+
+1. **Buscar trazas ANTES de la optimización**:
+   ```
+   Service Name: hexarch
+   Span Name: send user.created
+   Lookback: Last 7 days (antes del deploy)
+   ```
+   - Duración promedio: `150ms`
+
+2. **Buscar trazas DESPUÉS de la optimización**:
+   ```
+   Service Name: hexarch
+   Span Name: send user.created
+   Lookback: Last hour (después del deploy)
+   ```
+   - Duración promedio: `50ms`
+
+3. **Resultado**: Mejora del 67% (de 150ms → 50ms) ✅
+
+---
+
+### **Ejemplo Práctico: Troubleshooting de un Error Real**
+
+**Escenario**: Un usuario reporta que no recibe el email de bienvenida.
+
+#### **Paso 1: Obtener el Trace ID**
+
+**Opción A**: Del log de la aplicación
+```bash
+# Buscar en logs por email del usuario
+grep "john@example.com" /var/log/hexarch/application.log
+
+# Output:
+2024-01-15 10:30:00 [f47ac10b8c4211eb8dcd0242ac130003,2b3c4d5e6f7a8b9c] INFO - Creating user: email=john@example.com
+```
+
+**Opción B**: Del response HTTP (si lo incluyes en headers)
+```bash
+curl -v http://localhost:8080/api/v1/users ...
+< X-Trace-Id: f47ac10b8c4211eb8dcd0242ac130003
+```
+
+---
+
+#### **Paso 2: Buscar la Traza en Zipkin**
+
+1. Pegar Trace ID en Zipkin: `f47ac10b8c4211eb8dcd0242ac130003`
+2. Click "Run Query"
+
+---
+
+#### **Paso 3: Analizar el Timeline**
+
+**Resultado en Zipkin**:
+```
+POST /api/v1/users - 295ms ✅
+  ├─ CreateUserService - 290ms ✅
+  │  ├─ INSERT users - 40ms ✅
+  │  └─ send user.created - 150ms ✅
+  └─ poll user.created - MISSING ❌ ← El consumer no procesó el mensaje!
+```
+
+**Observación**: El mensaje se envió a Kafka correctamente, pero NO hay span del consumer.
+
+---
+
+#### **Paso 4: Investigar el Consumer**
+
+**Posibles causas**:
+1. ✅ **Consumer no está corriendo** → Revisar `docker-compose ps`
+2. ✅ **Consumer tiene errores** → Revisar logs del consumer
+3. ✅ **Message en Dead Letter Topic** → Revisar topic `user.created.dlt`
+4. ✅ **Circuit Breaker OPEN** → EmailService está fallando
+
+**Verificar logs del consumer**:
+```bash
+docker-compose logs notifications-service | grep "john@example.com"
+
+# Output:
+2024-01-15 10:30:00 [f47ac10b8c4211eb8dcd0242ac130003,5e6f7a8b9cdef012] ERROR - Circuit breaker OPEN - Email no enviado a john@example.com
+```
+
+**Root Cause Encontrado**: Circuit Breaker está OPEN porque el servicio de email (SendGrid, SES, etc.) está caído.
+
+---
+
+#### **Paso 5: Verificar Circuit Breaker**
+
+```bash
+# Revisar métricas de Circuit Breaker
+curl http://localhost:8080/actuator/metrics/resilience4j.circuitbreaker.state
+
+{
+  "name": "resilience4j.circuitbreaker.state",
+  "measurements": [
+    { "statistic": "VALUE", "value": 1.0 }  // 1.0 = OPEN
+  ],
+  "availableTags": [
+    { "tag": "name", "values": ["emailService"] }
+  ]
+}
+```
+
+**Confirmado**: Circuit Breaker está OPEN.
+
+---
+
+#### **Paso 6: Solución**
+
+1. **Verificar servicio externo** (SendGrid, SES): ¿Está disponible?
+2. **Esperar a que Circuit Breaker pase a HALF_OPEN** (después de `wait-duration`)
+3. **Reprocesar mensajes del DLT** (Dead Letter Topic) cuando el servicio se recupere
+
+---
+
+### **Configuración de Sampling (Producción)**
+
+En producción, **no trackees el 100% de los requests** (overhead alto).
+
+**Recomendaciones de sampling**:
+
+| Tráfico | Sampling Rate | Justificación |
+|---------|---------------|---------------|
+| **< 100 req/s** | `1.0` (100%) | Bajo overhead, trackea todo |
+| **100-1000 req/s** | `0.1` (10%) | Balance entre overhead y visibilidad |
+| **> 1000 req/s** | `0.01` (1%) | Solo para identificar patrones, no debugging individual |
+
+**Configuración en `application.yaml`**:
+```yaml
+management:
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_RATE:0.1}  # 10% por defecto
+```
+
+**Variables de entorno por environment**:
+```bash
+# Local/Dev: 100% sampling
+TRACING_SAMPLING_RATE=1.0
+
+# Staging: 50% sampling
+TRACING_SAMPLING_RATE=0.5
+
+# Production: 10% sampling
+TRACING_SAMPLING_RATE=0.1
+
+# Production (alta carga): 1% sampling
+TRACING_SAMPLING_RATE=0.01
+```
+
+---
+
+### **Mejores Prácticas de Tracing**
+
+#### **1. Añadir Tags Custom en Spans**
+
+**Tags útiles**:
+```java
+@Service
+public class CreateUserService {
+
+    private final Tracer tracer;
+
+    public UserResult execute(CreateUserCommand command) {
+        // Obtener span actual
+        Span span = tracer.currentSpan();
+
+        if (span != null) {
+            // Añadir tags de negocio
+            span.tag("user.username", command.username());
+            span.tag("user.email", command.email());
+            span.tag("business.operation", "user-registration");
+        }
+
+        // ... resto de la lógica
+    }
+}
+```
+
+**Beneficio**: Filtrar en Zipkin por `user.username=johndoe` o `business.operation=user-registration`.
+
+---
+
+#### **2. Propagar Trace ID en Responses HTTP**
+
+**Añade el Trace ID al response header** para que el cliente pueda reportarlo en caso de error.
+
+**Código** (`GlobalResponseFilter.java`):
+```java
+@Component
+public class TraceIdResponseFilter implements Filter {
+
+    private final Tracer tracer;
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+
+        HttpServletResponse httpResponse = (HttpServletResponse) response;
+
+        // Obtener Trace ID actual
+        Span span = tracer.currentSpan();
+        if (span != null) {
+            String traceId = span.context().traceId();
+            httpResponse.setHeader("X-Trace-Id", traceId);
+        }
+
+        chain.doFilter(request, response);
+    }
+}
+```
+
+**Response**:
+```http
+HTTP/1.1 201 Created
+X-Trace-Id: f47ac10b8c4211eb8dcd0242ac130003
+Content-Type: application/json
+...
+```
+
+**Beneficio**: El cliente puede reportar el Trace ID en soporte: "Mi request con Trace ID `f47ac10b...` falló".
+
+---
+
+#### **3. Logging con Trace ID**
+
+Micrometer Tracing **automáticamente añade Trace ID y Span ID a los logs** (ya está configurado en este proyecto).
+
+**Log format en `logback-spring.xml`**:
+```xml
+<pattern>%d{yyyy-MM-dd HH:mm:ss} [%X{traceId},%X{spanId}] %5p - %m%n</pattern>
+```
+
+**Output**:
+```
+2024-01-15 10:30:00 [f47ac10b8c4211eb8dcd0242ac130003,2b3c4d5e6f7a8b9c] INFO - User created: userId=550e8400
+```
+
+**Beneficio**: Correlacionar logs con trazas en Zipkin.
+
+---
+
+#### **4. Monitorizar Latencias con Alertas**
+
+**Crear alerta en Grafana**:
+```promql
+# Latencia p99 de POST /api/v1/users > 500ms
+histogram_quantile(0.99,
+  rate(http_server_requests_seconds_bucket{
+    uri="/api/v1/users",
+    method="POST"
+  }[5m])
+) > 0.5
+```
+
+**Acción**: Si se dispara, buscar trazas en Zipkin con `Min Duration: 500ms` para identificar el cuello de botella.
 
 ---
 
