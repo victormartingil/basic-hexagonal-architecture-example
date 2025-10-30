@@ -8,6 +8,10 @@ import com.example.hexarch.user.application.port.output.UserRepository;
 import com.example.hexarch.user.domain.event.UserCreatedEvent;
 import com.example.hexarch.user.domain.exception.UserAlreadyExistsException;
 import com.example.hexarch.user.domain.model.User;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,9 +47,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional  // Toda la operación es atómica: si algo falla, se hace rollback
 public class CreateUserService implements CreateUserUseCase {
 
+    private static final Logger log = LoggerFactory.getLogger(CreateUserService.class);
+
     // Puertos de salida (dependencies)
     private final UserRepository userRepository;
     private final UserEventPublisher userEventPublisher;
+
+    // Observability: Métricas custom
+    private final MeterRegistry meterRegistry;
+    private final String environment;
 
     /**
      * Constructor - Inyección de dependencias
@@ -55,13 +65,19 @@ public class CreateUserService implements CreateUserUseCase {
      *
      * @param userRepository repositorio para persistir usuarios
      * @param userEventPublisher publicador para eventos de usuarios
+     * @param meterRegistry registro de métricas de Micrometer para observability
+     * @param environment entorno actual (local, dev, prod) para tags de métricas
      */
     public CreateUserService(
             UserRepository userRepository,
-            UserEventPublisher userEventPublisher
+            UserEventPublisher userEventPublisher,
+            MeterRegistry meterRegistry,
+            @Value("${ENVIRONMENT:local}") String environment
     ) {
         this.userRepository = userRepository;
         this.userEventPublisher = userEventPublisher;
+        this.meterRegistry = meterRegistry;
+        this.environment = environment;
     }
 
     /**
@@ -82,14 +98,19 @@ public class CreateUserService implements CreateUserUseCase {
     @Override
     public UserResult execute(CreateUserCommand command) {
 
+        // 📝 LOG INFO: Evento de negocio importante (inicio de operación)
+        log.info("Creating user: username={}, email={}", command.username(), command.email());
+
         // 1. VALIDAR PRECONDICIONES (reglas de negocio)
         // Verificar que el username no esté en uso
         if (userRepository.existsByUsername(command.username())) {
+            log.warn("Username already exists: {}", command.username());
             throw new UserAlreadyExistsException(command.username());
         }
 
         // Verificar que el email no esté en uso
         if (userRepository.existsByEmail(command.email())) {
+            log.warn("Email already exists: {}", command.email());
             throw new UserAlreadyExistsException(command.email());
         }
 
@@ -99,6 +120,12 @@ public class CreateUserService implements CreateUserUseCase {
 
         // 3. PERSISTIR (usando output port)
         User savedUser = userRepository.save(user);
+
+        // 📝 LOG INFO: Usuario creado exitosamente
+        log.info("User created successfully: userId={}, username={}, email={}",
+                savedUser.getId(),
+                savedUser.getUsername().getValue(),
+                savedUser.getEmail().getValue());
 
         // 4. PUBLICAR EVENTO (usando output port)
         // Creamos el evento de dominio
@@ -110,6 +137,13 @@ public class CreateUserService implements CreateUserUseCase {
         );
         // Publicamos el evento (esto podría ir a Kafka, RabbitMQ, etc.)
         userEventPublisher.publish(event);
+
+        // 📊 MÉTRICA CUSTOM: Contador de usuarios creados
+        // Esta métrica se expone en /actuator/prometheus
+        meterRegistry.counter("users.created.total",
+                              "status", "success",
+                              "environment", environment)
+                     .increment();
 
         // 5. RETORNAR RESULTADO
         // Convertimos el modelo de dominio (User) a DTO de application (UserResult)

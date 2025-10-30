@@ -8,18 +8,20 @@ import com.example.hexarch.user.domain.event.UserCreatedEvent;
 import com.example.hexarch.user.domain.exception.UserAlreadyExistsException;
 import com.example.hexarch.user.domain.exception.ValidationException;
 import com.example.hexarch.user.domain.model.User;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
@@ -58,8 +60,10 @@ class CreateUserServiceTest {
     @Mock
     private UserEventPublisher userEventPublisher;
 
-    // Instancia a testear (con mocks inyectados)
-    @InjectMocks
+    @Mock
+    private MeterRegistry meterRegistry;
+
+    // Instancia a testear
     private CreateUserService createUserService;
 
     // Datos de prueba
@@ -71,6 +75,19 @@ class CreateUserServiceTest {
      */
     @BeforeEach
     void setUp() {
+        // Mock del Counter de métricas
+        Counter mockCounter = mock(Counter.class);
+        when(meterRegistry.counter(anyString(), anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(mockCounter);
+
+        // Crear instancia del servicio manualmente (inyectando mocks)
+        createUserService = new CreateUserService(
+                userRepository,
+                userEventPublisher,
+                meterRegistry,
+                "test"  // environment
+        );
+
         // Crear un command válido para usar en los tests
         validCommand = new CreateUserCommand("johndoe", "john@example.com");
     }
