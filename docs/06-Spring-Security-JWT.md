@@ -11,11 +11,12 @@
 3. [Spring Security - Arquitectura](#3-spring-security---arquitectura)
 4. [Implementación en el Proyecto](#4-implementación-en-el-proyecto)
 5. [Roles y Autorización](#5-roles-y-autorización)
-6. [Flujo Completo de una Request](#6-flujo-completo-de-una-request)
-7. [Ejemplos Prácticos](#7-ejemplos-prácticos)
-8. [Testing de Seguridad](#8-testing-de-seguridad)
-9. [Best Practices](#9-best-practices)
-10. [Troubleshooting](#10-troubleshooting)
+6. [CORS - Cross-Origin Resource Sharing](#6-cors---cross-origin-resource-sharing)
+7. [Flujo Completo de una Request](#7-flujo-completo-de-una-request)
+8. [Ejemplos Prácticos](#8-ejemplos-prácticos)
+9. [Testing de Seguridad](#9-testing-de-seguridad)
+10. [Best Practices](#10-best-practices)
+11. [Troubleshooting](#11-troubleshooting)
 
 ---
 
@@ -561,9 +562,483 @@ Spring Security evaluará si el usuario tiene **al menos uno** de los roles requ
 
 ---
 
-## 6. Flujo Completo de una Request
+## 6. CORS - Cross-Origin Resource Sharing
 
-### 6.1. Caso 1: Request Exitoso (Usuario con permisos)
+### 6.1. ¿Qué es CORS?
+
+**CORS** (Cross-Origin Resource Sharing) es un mecanismo de seguridad del navegador que controla si una aplicación web en un **origen** (dominio) puede hacer requests a un **origen diferente** (dominio diferente).
+
+#### Concepto Fundamental: Same-Origin Policy
+
+Los navegadores implementan la **Same-Origin Policy** (Política del Mismo Origen), una política de seguridad que **bloquea** requests entre diferentes orígenes por defecto.
+
+**¿Qué es un "origen"?**
+
+Un origen se define por 3 componentes:
+
+```
+https://api.example.com:8080
+  ↓        ↓              ↓
+Protocolo  Dominio      Puerto
+```
+
+**Mismo origen**:
+```
+Origen 1: https://api.example.com:8080
+Origen 2: https://api.example.com:8080  ✅ MISMO ORIGEN
+```
+
+**Diferente origen** (cualquiera de estos):
+```
+Origen 1: https://api.example.com:8080
+Origen 2: http://api.example.com:8080   ❌ Protocolo diferente (http vs https)
+Origen 3: https://app.example.com:8080  ❌ Dominio diferente (api vs app)
+Origen 4: https://api.example.com:9090  ❌ Puerto diferente (8080 vs 9090)
+```
+
+### 6.2. ¿Por Qué Existe Same-Origin Policy?
+
+**Protección contra ataques**:
+
+Sin Same-Origin Policy, un sitio malicioso podría:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ ESCENARIO SIN SAME-ORIGIN POLICY (PELIGROSO)                │
+│                                                              │
+│ 1. Usuario está autenticado en banco.com                    │
+│ 2. Usuario visita sitio-malicioso.com                       │
+│ 3. sitio-malicioso.com ejecuta JavaScript:                  │
+│                                                              │
+│    fetch('https://banco.com/api/transferir', {              │
+│      method: 'POST',                                         │
+│      body: JSON.stringify({                                  │
+│        destino: 'atacante',                                  │
+│        cantidad: 10000                                       │
+│      })                                                      │
+│    })                                                        │
+│                                                              │
+│ 4. ❌ Request incluye cookies de banco.com automáticamente  │
+│ 5. ❌ Dinero transferido sin consentimiento del usuario     │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Same-Origin Policy bloquea esto**:
+- sitio-malicioso.com NO puede leer respuestas de banco.com
+- Protege al usuario de ataques CSRF (Cross-Site Request Forgery)
+
+### 6.3. ¿Cuándo Necesitas CORS?
+
+#### ✅ Escenario 1: Frontend en Diferente Dominio
+
+**Situación típica**:
+
+```
+Frontend (React/Angular/Vue):
+  ↓
+  Corre en http://localhost:3000
+
+Backend (Spring Boot):
+  ↓
+  Corre en http://localhost:8080
+
+Problema: Diferentes puertos = Diferentes orígenes
+```
+
+**Request desde Frontend**:
+
+```javascript
+// Frontend (React) en http://localhost:3000
+fetch('http://localhost:8080/api/users')
+  .then(response => response.json())
+  .then(data => console.log(data))
+```
+
+**Sin CORS configurado**:
+
+```
+❌ CORS Error:
+
+Access to fetch at 'http://localhost:8080/api/users' from origin
+'http://localhost:3000' has been blocked by CORS policy:
+No 'Access-Control-Allow-Origin' header is present on the requested resource.
+```
+
+**Con CORS configurado**:
+
+```
+✅ Request exitoso
+
+Response headers:
+Access-Control-Allow-Origin: http://localhost:3000
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE
+```
+
+#### ✅ Escenario 2: Aplicaciones Multi-Dominio
+
+```
+Producción:
+- Frontend: https://app.example.com
+- API Backend: https://api.example.com
+- Admin Panel: https://admin.example.com
+
+Todos necesitan comunicarse con api.example.com → Requiere CORS
+```
+
+### 6.4. ¿Cómo Funciona CORS?
+
+#### 6.4.1. Flujo Simple (GET/POST sin headers custom)
+
+```mermaid
+sequenceDiagram
+    participant B as Navegador (localhost:3000)
+    participant API as API (localhost:8080)
+
+    Note over B,API: Request Simple (GET/POST básico)
+    B->>API: GET /api/users<br/>Origin: http://localhost:3000
+    API->>API: Verificar si origen está permitido
+    API-->>B: 200 OK<br/>Access-Control-Allow-Origin: http://localhost:3000<br/>{users data}
+    B->>B: ✅ Navegador permite acceder a la respuesta
+```
+
+#### 6.4.2. Preflight Request (POST con Authorization header)
+
+Cuando el request es "complejo" (incluye headers como `Authorization`, `Content-Type: application/json`, etc.), el navegador envía primero un **preflight request** (OPTIONS).
+
+```mermaid
+sequenceDiagram
+    participant B as Navegador
+    participant API as API
+
+    Note over B,API: 1. PREFLIGHT (OPTIONS)
+    B->>API: OPTIONS /api/users<br/>Origin: http://localhost:3000<br/>Access-Control-Request-Method: POST<br/>Access-Control-Request-Headers: Authorization
+    API->>API: ¿Origen permitido? ¿Método permitido? ¿Headers permitidos?
+    API-->>B: 200 OK<br/>Access-Control-Allow-Origin: http://localhost:3000<br/>Access-Control-Allow-Methods: POST<br/>Access-Control-Allow-Headers: Authorization
+
+    Note over B,API: 2. REQUEST REAL (si preflight OK)
+    B->>API: POST /api/users<br/>Authorization: Bearer token<br/>{user data}
+    API-->>B: 201 Created
+```
+
+**Qué valida el preflight**:
+1. ¿El origen está permitido?
+2. ¿El método HTTP está permitido?
+3. ¿Los headers están permitidos?
+
+Si todo OK → Navegador envía el request real
+
+### 6.5. Implementación en Este Proyecto
+
+#### 6.5.1. Configuración en application.yaml
+
+```yaml
+# src/main/resources/application.yaml
+cors:
+  # DEVELOPMENT: Permisivo
+  # - 3000: React, Next.js
+  # - 4200: Angular
+  # - 8081: Vue.js
+  allowed-origins: http://localhost:3000,http://localhost:4200,http://localhost:8081
+
+  # PRODUCTION: Restrictivo (usar variable de entorno)
+  # allowed-origins: ${CORS_ALLOWED_ORIGINS:https://app.example.com}
+```
+
+#### 6.5.2. Configuración en SecurityConfig.java
+
+```java
+// src/main/java/.../SecurityConfig.java
+@Bean
+public CorsConfigurationSource corsConfigurationSource() {
+    CorsConfiguration configuration = new CorsConfiguration();
+
+    // 1. Orígenes permitidos (de application.yaml)
+    configuration.setAllowedOrigins(
+        Arrays.asList(this.allowedOrigins.split(","))
+    );
+
+    // 2. Métodos HTTP permitidos
+    configuration.setAllowedMethods(
+        List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+    );
+
+    // 3. Headers permitidos (incluye Authorization para JWT)
+    configuration.setAllowedHeaders(
+        List.of("Authorization", "Content-Type", "X-Requested-With")
+    );
+
+    // 4. Headers expuestos al navegador
+    configuration.setExposedHeaders(
+        List.of("X-Total-Count", "Link")
+    );
+
+    // 5. Permitir credenciales (cookies, Authorization headers)
+    configuration.setAllowCredentials(true);
+
+    // 6. Tiempo de caché del preflight (1 hora)
+    configuration.setMaxAge(3600L);
+
+    // Aplicar a todos los endpoints
+    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+    source.registerCorsConfiguration("/**", configuration);
+    return source;
+}
+```
+
+#### 6.5.3. Integración con Spring Security
+
+```java
+// En SecurityConfig.java
+@Bean
+public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    http
+        .csrf(AbstractHttpConfigurer::disable)
+
+        // ✅ Configurar CORS (debe ir ANTES de authorizeHttpRequests)
+        .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+
+        .sessionManagement(session -> session
+            .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+        )
+        .authorizeHttpRequests(auth -> auth
+            // ... configuración de endpoints
+        );
+
+    return http.build();
+}
+```
+
+### 6.6. ¿Qué Limita CORS?
+
+#### Restricciones que CORS Puede Aplicar
+
+1. **Orígenes Permitidos** (`Access-Control-Allow-Origin`):
+   ```
+   ✅ Permitido: http://localhost:3000
+   ❌ Bloqueado: http://localhost:4000
+   ```
+
+2. **Métodos HTTP** (`Access-Control-Allow-Methods`):
+   ```
+   ✅ Permitido: GET, POST
+   ❌ Bloqueado: DELETE (si no está configurado)
+   ```
+
+3. **Headers** (`Access-Control-Allow-Headers`):
+   ```
+   ✅ Permitido: Authorization, Content-Type
+   ❌ Bloqueado: X-Custom-Header (si no está configurado)
+   ```
+
+4. **Credenciales** (`Access-Control-Allow-Credentials`):
+   ```
+   true  → Permite enviar cookies, Authorization headers
+   false → Bloquea cookies (solo requests anónimos)
+   ```
+
+### 6.7. Perfiles: Desarrollo vs Producción
+
+#### Desarrollo (Permisivo)
+
+```yaml
+# application-dev.yaml
+cors:
+  allowed-origins: http://localhost:3000,http://localhost:4200,http://localhost:8081
+```
+
+**Características**:
+- ✅ Permite múltiples puertos locales
+- ✅ Facilita desarrollo con diferentes frameworks frontend
+- ⚠️ NO usar en producción
+
+#### Producción (Restrictivo)
+
+```yaml
+# application-prod.yaml
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS}
+```
+
+```bash
+# Variables de entorno
+CORS_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com
+```
+
+**Características**:
+- ✅ Solo dominios específicos
+- ✅ HTTPS obligatorio
+- ❌ NUNCA usar wildcard "*" con credentials
+
+### 6.8. Consideraciones de Seguridad
+
+#### ❌ NUNCA Hagas Esto en Producción
+
+```java
+// ❌ MAL: Permite CUALQUIER origen
+configuration.setAllowedOrigins(List.of("*"));
+configuration.setAllowCredentials(true);
+
+// ❌ El navegador rechaza esta combinación por seguridad
+// Error: Cannot use wildcard in Access-Control-Allow-Origin when credentials flag is true
+```
+
+#### ✅ Best Practices
+
+```java
+// ✅ BIEN: Lista explícita de orígenes
+configuration.setAllowedOrigins(List.of(
+    "https://app.example.com",
+    "https://admin.example.com"
+));
+configuration.setAllowCredentials(true);
+
+// ✅ BIEN: Usar patrón para subdominios (Spring Boot 2.7+)
+configuration.setAllowedOriginPatterns(List.of(
+    "https://*.example.com"
+));
+```
+
+#### Validación Adicional Recomendada
+
+```java
+// Validar origen dinámicamente si es necesario
+@Bean
+public CorsConfigurationSource corsConfigurationSource() {
+    return request -> {
+        String origin = request.getHeader("Origin");
+
+        // Validar contra lista permitida
+        if (isAllowedOrigin(origin)) {
+            CorsConfiguration config = new CorsConfiguration();
+            config.setAllowedOrigins(List.of(origin));
+            // ... resto de configuración
+            return config;
+        }
+
+        return null; // Bloquea el request
+    };
+}
+```
+
+### 6.9. Testing CORS
+
+#### Test con curl
+
+```bash
+# Simular preflight request
+curl -X OPTIONS http://localhost:8080/api/users \
+  -H "Origin: http://localhost:3000" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: Authorization" \
+  -v
+
+# Verificar headers en respuesta:
+# Access-Control-Allow-Origin: http://localhost:3000
+# Access-Control-Allow-Methods: POST
+# Access-Control-Allow-Headers: Authorization
+```
+
+#### Test con JavaScript (navegador)
+
+```javascript
+// Ejecutar en consola del navegador en http://localhost:3000
+fetch('http://localhost:8080/api/users', {
+  method: 'GET',
+  headers: {
+    'Authorization': 'Bearer token'
+  }
+})
+.then(response => response.json())
+.then(data => console.log('✅ CORS funcionando:', data))
+.catch(error => console.error('❌ CORS bloqueado:', error));
+```
+
+### 6.10. Troubleshooting CORS
+
+#### Error 1: "CORS policy: No 'Access-Control-Allow-Origin' header"
+
+**Problema**: El servidor no devuelve el header CORS.
+
+**Solución**:
+```java
+// Verificar que CORS está configurado en SecurityConfig
+.cors(cors -> cors.configurationSource(corsConfigurationSource()))
+```
+
+#### Error 2: "CORS policy: Request header field Authorization is not allowed"
+
+**Problema**: Header `Authorization` no está en la lista de permitidos.
+
+**Solución**:
+```java
+configuration.setAllowedHeaders(List.of(
+    "Authorization",  // ← Asegurar que está incluido
+    "Content-Type"
+));
+```
+
+#### Error 3: "CORS policy: The value of 'Access-Control-Allow-Credentials' is not true"
+
+**Problema**: Frontend envía credenciales pero servidor no las permite.
+
+**Solución**:
+```java
+configuration.setAllowCredentials(true);
+```
+
+```javascript
+// Frontend debe incluir:
+fetch('http://localhost:8080/api/users', {
+  credentials: 'include'  // ← Importante
+})
+```
+
+#### Error 4: CORS funciona en navegador pero no en Postman/curl
+
+**No es un problema**: CORS es una **restricción del navegador**.
+
+```
+Postman/curl: Sin restricciones CORS (no es un navegador)
+Navegador: Aplica Same-Origin Policy → Requiere CORS
+```
+
+### 6.11. CORS vs CSRF
+
+**Diferentes conceptos de seguridad**:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ CORS (Cross-Origin Resource Sharing)                       │
+│                                                             │
+│ Qué protege: Control de acceso entre orígenes             │
+│ Nivel: Cliente (navegador) + Servidor                      │
+│ Problema que resuelve: ¿Quién puede acceder a mi API?     │
+│                                                             │
+│ Ejemplo: ¿Puede app.example.com hacer requests a          │
+│          api.example.com?                                   │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ CSRF (Cross-Site Request Forgery)                          │
+│                                                             │
+│ Qué protege: Evitar requests maliciosos desde otros sitios│
+│ Nivel: Servidor                                             │
+│ Problema que resuelve: ¿Cómo evito que sitio-malicioso.com│
+│                         envíe requests a mi nombre?         │
+│                                                             │
+│ Solución: CSRF tokens (NO necesario con JWT en header)    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**En este proyecto**:
+- ✅ CORS: Configurado (permite frontend en otro puerto)
+- ✅ CSRF: Desactivado (no necesario con JWT stateless)
+
+---
+
+## 7. Flujo Completo de una Request
+
+### 7.1. Caso 1: Request Exitoso (Usuario con permisos)
 
 ```mermaid
 sequenceDiagram

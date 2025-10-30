@@ -1063,7 +1063,7 @@ Si ninguna de estas soluciones funciona:
 2. **Busca el error específico**: Copia el mensaje de error y busca en Google/Stack Overflow
 3. **Revisa la configuración**: `application.yaml`, `docker-compose.yml`
 4. **Verifica versiones**: Java, Maven, Docker
-5. **Pregunta en GitHub Issues**: [Abrir issue](https://github.com/tu-usuario/hexarch/issues)
+5. **Pregunta en GitHub Issues**: [Abrir issue](https://github.com/victormartingil/basic-hexagonal-architecture-example/issues)
 
 ---
 

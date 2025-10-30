@@ -15,8 +15,8 @@
 
 ```bash
 # 1. Clonar el repositorio (si no lo has hecho)
-git clone https://github.com/tu-usuario/hexarch.git
-cd hexarch
+git clone https://github.com/victormartingil/basic-hexagonal-architecture-example.git
+cd basic-hexagonal-architecture-example
 
 # 2. Levantar infraestructura (PostgreSQL + Kafka)
 docker-compose up -d
@@ -87,9 +87,10 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
 - **🩺 Spring Actuator**: Health, metrics, prometheus endpoints
 
 ### **✅ Testing Completo**
-- **116 Tests Totales**: Unit (79), Integration (16), Architecture (21), E2E (pendiente)
+- **126+ Tests Totales**: Unit (79), Integration (16), Architecture (21), E2E (10+)
+- **🥒 E2E con Karate**: Tests end-to-end con Gherkin/BDD (local y docker modes)
 - **🐳 Testcontainers**: Integration tests con PostgreSQL y Embedded Kafka
-- **🥒 E2E con Karate**: Tests end-to-end contra local y Docker
+- **📊 Test Pyramid**: 65% Unit, 15% Integration, 10% E2E (recomendado)
 - **📊 JaCoCo**: Cobertura de código 80%+ (enforced)
 - **Kafka Tests**: Separados por Publisher/Consumer siguiendo best practices
 
@@ -194,10 +195,12 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
 ### **🆕 Guías Adicionales**
 
 13. **[13-E2E-Testing-Karate.md](docs/13-E2E-Testing-Karate.md)** - 🥒 Tests E2E con Karate
+    - **Test Pyramid**: Percentajes recomendados (Unit 65%, Integration 15%, E2E 10%)
+    - Qué debe testear cada tipo de test (Unit vs Integration vs E2E)
     - ¿Qué son los tests E2E y cuándo usarlos?
-    - Setup de Karate para tests BDD
-    - Tests contra localhost vs Docker
-    - Ejemplos prácticos con Gherkin
+    - Setup de Karate para tests BDD (Gherkin)
+    - Tests contra localhost (modo local) vs Docker (CI/CD)
+    - Ejemplos prácticos (create-user.feature, get-user.feature)
 
 14. **[14-Troubleshooting-Guide.md](docs/14-Troubleshooting-Guide.md)** - 🔧 Guía de Troubleshooting
     - Errores comunes y soluciones

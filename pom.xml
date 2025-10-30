@@ -32,6 +32,7 @@
 		<openapi-generator.version>7.2.0</openapi-generator.version>
 		<springdoc.version>2.3.0</springdoc.version>
 		<archunit.version>1.3.0</archunit.version>
+		<karate.version>1.4.1</karate.version>
 
 		<!-- Code Quality -->
 		<jacoco.version>0.8.12</jacoco.version>
@@ -221,6 +222,14 @@
 			<groupId>com.tngtech.archunit</groupId>
 			<artifactId>archunit-junit5</artifactId>
 			<version>${archunit.version}</version>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- Karate para E2E tests -->
+		<dependency>
+			<groupId>com.intuit.karate</groupId>
+			<artifactId>karate-junit5</artifactId>
+			<version>${karate.version}</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

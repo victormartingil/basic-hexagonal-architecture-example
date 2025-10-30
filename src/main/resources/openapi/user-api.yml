@@ -17,7 +17,7 @@ info:
   version: 1.0.0
   contact:
     name: Hexagonal Architecture Project
-    url: https://github.com/example/hexarch
+    url: https://github.com/victormartingil/basic-hexagonal-architecture-example
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
