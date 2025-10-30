@@ -8,7 +8,8 @@
 4. [Building Blocks de DDD](#building-blocks-de-ddd)
 5. [Ejemplos Prácticos en el Proyecto](#ejemplos-prácticos)
 6. [Errores Comunes](#errores-comunes)
-7. [Cuándo Usar Cada Concepto](#cuándo-usar-cada-concepto)
+7. [Eventos: Domain Events vs Integration Events](#eventos-domain-events-vs-integration-events)
+8. [Cuándo Usar Cada Concepto](#cuándo-usar-cada-concepto)
 
 ---
 
@@ -543,6 +544,448 @@ item.setQuantity(5);  // ¡Bypasea las reglas del Order!
 // BIEN: Modificar a través del Aggregate Root
 order.changeItemQuantity(itemId, 5);  // Order valida y mantiene consistencia
 ```
+
+---
+
+## Eventos: Domain Events vs Integration Events
+
+### ¿Qué son los Eventos?
+
+Un **evento** es algo que **ya pasó** en el sistema. Es un hecho inmutable del pasado.
+
+**Ejemplos:**
+- ✅ `UserCreatedEvent` - "Un usuario fue creado"
+- ✅ `OrderPlacedEvent` - "Un pedido fue realizado"
+- ✅ `PaymentCompletedEvent` - "Un pago se completó"
+
+**Características:**
+- 🕐 **Tiempo pasado**: "UserCreated", no "CreateUser"
+- 🔒 **Inmutable**: No se pueden modificar
+- 📢 **Comunicación**: Avisan a otros componentes
+
+---
+
+### 🎯 Eventos vs Llamadas Síncronas: ¿Cuándo Usar Eventos?
+
+#### ❌ NO uses eventos cuando:
+
+```java
+// INCORRECTO: Validación crítica como evento
+public void createUser(Username username, Email email) {
+    User user = User.create(username, email);
+    userRepository.save(user);
+
+    // ❌ MAL: Validar email como evento
+    eventPublisher.publish(new ValidateEmailEvent(email));
+
+    // Problema: ¿Qué pasa si falla? El usuario ya está guardado
+}
+```
+
+**No uses eventos para:**
+- ❌ Validaciones que pueden fallar
+- ❌ Operaciones que DEBEN ejecutarse (críticas)
+- ❌ Cuando necesitas el resultado inmediatamente
+- ❌ Transacciones distribuidas (2-phase commit)
+
+#### ✅ SÍ usa eventos cuando:
+
+```java
+// CORRECTO: Side effects no críticos como eventos
+public UserResult createUser(CreateUserCommand command) {
+    // 1. Lógica crítica: síncrona
+    User user = User.create(command.username(), command.email());
+    userRepository.save(user);
+
+    // 2. Side effects: eventos (pueden fallar sin afectar la creación)
+    eventPublisher.publish(new UserCreatedEvent(
+        user.getId(),
+        user.getUsername(),
+        user.getEmail()
+    ));
+
+    return UserResult.success(user);
+}
+
+// Listeners reaccionan independientemente
+@EventListener
+public void onUserCreated(UserCreatedEvent event) {
+    emailService.sendWelcome(event.email());  // Si falla, usuario igual existe
+}
+```
+
+**Usa eventos para:**
+- ✅ Notificaciones (emails, SMS, push)
+- ✅ Estadísticas/Analytics (no críticas)
+- ✅ Auditoría/Logging
+- ✅ Sincronización con otros servicios
+- ✅ Desacoplar componentes
+- ✅ Procesos que pueden ejecutarse después
+
+**Regla de oro:** Si puede fallar y no debe afectar la operación principal → evento
+
+---
+
+### 📦 Tipos de Eventos: Domain vs Integration
+
+Hay **dos tipos principales** de eventos en microservicios:
+
+#### 1️⃣ Domain Events (Eventos de Dominio)
+
+**Qué son:** Eventos **internos** dentro del mismo servicio/bounded context
+
+**Tecnología:** Spring Events (in-memory), EventBus interno
+
+**Ejemplo en este proyecto:**
+```java
+// Publisher
+@Component
+@Primary
+public class SpringEventUserEventPublisherAdapter implements UserEventPublisher {
+    private final ApplicationEventPublisher eventPublisher;
+
+    public void publish(UserCreatedEvent event) {
+        eventPublisher.publishEvent(event);  // ✅ In-memory
+    }
+}
+
+// Listeners (mismo servicio)
+@Component
+public class SendWelcomeEmailListener {
+    @EventListener  // ✅ Se ejecuta automáticamente
+    public void onUserCreated(UserCreatedEvent event) {
+        emailService.sendWelcome(event.email());
+    }
+}
+
+@Component
+@Order(2)  // Se ejecuta después del listener anterior
+public class UpdateUserStatsListener {
+    @EventListener
+    public void onUserCreated(UserCreatedEvent event) {
+        statsService.incrementTotalUsers();
+    }
+}
+```
+
+**Características:**
+- ✅ Mismo proceso (JVM)
+- ✅ Rápido (memoria)
+- ✅ Simple (sin infraestructura externa)
+- ❌ Si la app se cae, eventos se pierden
+- ❌ Solo para el mismo servicio
+
+**Cuándo usarlos:**
+- Desacoplar lógica dentro del mismo servicio
+- Side effects locales (email, cache, stats)
+- No necesitas durabilidad
+
+---
+
+#### 2️⃣ Integration Events (Eventos de Integración)
+
+**Qué son:** Eventos **entre servicios** diferentes (microservicios)
+
+**Tecnología:** Kafka, RabbitMQ, AWS SNS/SQS, Google Pub/Sub
+
+**Ejemplo en este proyecto:**
+```java
+// Publisher (User Service)
+@Component
+public class KafkaUserEventPublisherAdapter implements UserEventPublisher {
+    private final KafkaTemplate<String, UserCreatedEvent> kafkaTemplate;
+
+    public void publish(UserCreatedEvent event) {
+        kafkaTemplate.send(
+            "user.created",              // Topic
+            event.userId().toString(),    // Key (para ordenamiento)
+            event                         // Event
+        );
+    }
+}
+
+// Consumer (Notifications Service - otro microservicio)
+@Component
+public class UserEventsKafkaConsumer {
+    @KafkaListener(topics = "user.created")
+    public void consume(UserCreatedEvent event) {
+        // Este código está en OTRO microservicio
+        notificationService.sendWelcomeEmail(event.email());
+    }
+}
+```
+
+**Características:**
+- ✅ Entre servicios diferentes
+- ✅ Duradero (persistido en Kafka)
+- ✅ Escalable (múltiples consumers)
+- ✅ Replay posible (volver a procesar eventos)
+- ✅ Comunicación asíncrona
+- ❌ Más complejo (infraestructura)
+- ❌ Latencia mayor que in-memory
+
+**Cuándo usarlos:**
+- Comunicar bounded contexts diferentes
+- Sincronizar datos entre microservicios
+- Event sourcing
+- Necesitas durabilidad/replay
+
+---
+
+### 🔑 Kafka: Particiones, Claves y Ordenamiento
+
+#### ¿Por qué importan las claves (keys)?
+
+Kafka usa la **clave** para decidir a qué **partición** enviar el mensaje.
+
+**Sin clave:**
+```java
+// ❌ Sin clave: orden NO garantizado
+kafkaTemplate.send("user.created", event);
+
+// Resultado: Eventos del mismo usuario en particiones diferentes
+// Partition 0: UserUpdated(userId=123)
+// Partition 2: UserCreated(userId=123)  ← ¡Desorden!
+// Partition 1: UserDeleted(userId=123)
+```
+
+**Con clave:**
+```java
+// ✅ Con clave (userId): orden garantizado para el mismo usuario
+kafkaTemplate.send(
+    "user.created",
+    event.userId().toString(),  // ← Key = userId
+    event
+);
+
+// Resultado: Todos los eventos del mismo usuario en la MISMA partición
+// Partition 0: UserCreated(userId=123) → UserUpdated(userId=123) → UserDeleted(userId=123)
+//              ↑ Orden garantizado
+```
+
+**Regla:**
+> Mensajes con la **misma clave** van a la **misma partición** y se procesan **en orden**
+
+---
+
+#### Cómo elegir la clave
+
+| **Caso de Uso**              | **Clave Recomendada**        | **Por qué**                                      |
+|------------------------------|------------------------------|--------------------------------------------------|
+| Eventos de Usuario           | `userId`                     | Procesar eventos del mismo usuario en orden     |
+| Eventos de Pedido            | `orderId`                    | Procesar eventos del mismo pedido en orden      |
+| Eventos de Cuenta Bancaria   | `accountId`                  | Operaciones de la misma cuenta en orden         |
+| Eventos de Chat              | `conversationId`             | Mensajes de la misma conversación en orden      |
+| Logs genéricos               | `null` o random              | No importa el orden                              |
+
+**Ejemplo real:**
+```java
+@Component
+public class KafkaUserEventPublisherAdapter implements UserEventPublisher {
+
+    public void publish(UserCreatedEvent event) {
+        // ✅ CORRECTO: userId como clave
+        kafkaTemplate.send(
+            "user.created",
+            event.userId().toString(),  // ← Todos los eventos del mismo user en orden
+            event
+        );
+    }
+}
+```
+
+---
+
+#### Particiones: ¿Cuántas crear?
+
+**Regla simple:**
+```
+Particiones = Número de consumers que quieres en paralelo
+```
+
+**Ejemplo:**
+- 1 partición = 1 consumer máximo (sin paralelismo)
+- 3 particiones = hasta 3 consumers en paralelo
+- 10 particiones = hasta 10 consumers en paralelo
+
+**Más particiones = más paralelismo = más throughput**
+
+**Pero cuidado:**
+- ❌ Demasiadas particiones = overhead (complejidad, más archivos)
+- ✅ Empieza con 3-6 particiones, escala según necesidad
+
+---
+
+### 🏗️ Implementación Dual: Spring Events + Kafka
+
+En este proyecto, publicamos a **ambos sistemas simultáneamente**:
+
+```java
+@Component
+public class CompositeUserEventPublisherAdapter implements UserEventPublisher {
+
+    private final ApplicationEventPublisher springEventPublisher;  // In-memory
+    private final KafkaTemplate<String, UserCreatedEvent> kafkaTemplate;  // Kafka
+
+    @Override
+    public void publish(UserCreatedEvent event) {
+        // 1. Publicar in-memory (para listeners locales)
+        springEventPublisher.publishEvent(event);
+
+        // 2. Publicar a Kafka (para otros microservicios)
+        kafkaTemplate.send("user.created", event.userId().toString(), event);
+    }
+}
+```
+
+**Por qué dual publishing:**
+- ✅ Listeners locales (SendWelcomeEmailListener) se ejecutan inmediatamente
+- ✅ Otros microservicios (Notifications Service) reciben el evento vía Kafka
+- ✅ Lo mejor de ambos mundos
+
+---
+
+### 📋 Mejores Prácticas
+
+#### 1. Nombrado de Topics
+
+```java
+// ✅ RECOMENDADO: Dotted notation (más común)
+"user.created"
+"user.updated"
+"order.placed"
+"payment.completed"
+
+// ✅ También válido: Hyphenated
+"user-created"
+"order-placed"
+
+// ✅ Namespaced (más formal)
+"com.example.user.created"
+
+// ❌ Evitar: Mezclados o confusos
+"userCreated"
+"User_Created"
+"create_user"
+```
+
+**Recomendación:** Usa **dotted notation** (`user.created`) - es lo más común en la industria
+
+---
+
+#### 2. Estructura del Evento
+
+```java
+// ✅ CORRECTO: Record inmutable, tiempo pasado, datos completos
+public record UserCreatedEvent(
+    UUID userId,           // ID del aggregate
+    String username,       // Datos necesarios
+    String email,
+    Instant occurredAt,    // ✅ Timestamp importante
+    UUID correlationId     // ✅ Para tracing/debugging
+) {
+    // Factory method
+    public static UserCreatedEvent from(User user) {
+        return new UserCreatedEvent(
+            user.getId(),
+            user.getUsername(),
+            user.getEmail(),
+            Instant.now(),
+            UUID.randomUUID()
+        );
+    }
+}
+
+// ❌ INCORRECTO: Evento con solo el ID
+public record UserCreatedEvent(UUID userId) {}
+// Problema: Consumer necesita llamar a User Service para obtener datos
+```
+
+**Regla:** Incluye **todos los datos que los consumers necesitan** para evitar llamadas síncronas
+
+---
+
+#### 3. Orden de Ejecución (Spring Events)
+
+```java
+// Sin @Order: orden aleatorio
+@EventListener
+public void listener1(UserCreatedEvent event) { }
+
+@EventListener
+public void listener2(UserCreatedEvent event) { }
+
+// Con @Order: orden garantizado
+@EventListener
+@Order(1)  // ✅ Se ejecuta primero
+public void sendEmail(UserCreatedEvent event) { }
+
+@EventListener
+@Order(2)  // ✅ Se ejecuta segundo
+public void updateStats(UserCreatedEvent event) { }
+```
+
+---
+
+#### 4. Manejo de Errores
+
+```java
+@EventListener
+public void onUserCreated(UserCreatedEvent event) {
+    try {
+        emailService.send(event.email());
+    } catch (Exception e) {
+        // ⚠️ Decisión importante: ¿Qué hacer si falla?
+
+        // Opción 1: Loguear y continuar (evento no crítico)
+        logger.error("Failed to send email: {}", e.getMessage());
+        // No lanzar excepción → usuario se crea igual
+
+        // Opción 2: Lanzar excepción (evento crítico)
+        throw new EmailException("Cannot create user without email", e);
+        // Lanza excepción → rollback de la transacción completa
+    }
+}
+```
+
+**Usa `@TransactionalEventListener` para control fino:**
+```java
+// ✅ Se ejecuta DESPUÉS del commit (aunque falle, usuario ya existe)
+@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+public void onUserCreated(UserCreatedEvent event) {
+    emailService.send(event.email());
+    // Si falla, no afecta la creación del usuario
+}
+```
+
+---
+
+### 🎯 Comparación Rápida
+
+| **Aspecto**           | **Domain Events (Spring)**       | **Integration Events (Kafka)**     |
+|-----------------------|----------------------------------|------------------------------------|
+| **Alcance**           | Mismo servicio (JVM)             | Entre servicios (microservicios)   |
+| **Tecnología**        | Spring ApplicationEventPublisher | Kafka, RabbitMQ, SNS/SQS           |
+| **Velocidad**         | ⚡ Muy rápido (memoria)          | 🐌 Más lento (red)                |
+| **Durabilidad**       | ❌ Se pierde si app cae          | ✅ Persistido en disco            |
+| **Orden garantizado** | ✅ Sí (con @Order)               | ✅ Sí (misma key + misma partition)|
+| **Complejidad**       | 🟢 Simple                        | 🟡 Media (infraestructura)        |
+| **Cuándo usar**       | Side effects locales             | Comunicar microservicios           |
+| **Ejemplo**           | SendWelcomeEmailListener         | Notifications Service (otro MS)    |
+
+---
+
+### 📂 Archivos en el Proyecto
+
+**Domain Events (Spring Events):**
+- `SpringEventUserEventPublisherAdapter.java` - Publisher (@Primary)
+- `SendWelcomeEmailListener.java` - Listener de email
+- `UpdateUserStatsListener.java` - Listener de estadísticas
+
+**Integration Events (Kafka):**
+- `KafkaUserEventPublisherAdapter.java` - Publisher a Kafka
+- `UserEventsKafkaConsumer.java` - Consumer (Notifications Service simulado)
+- `docker-compose.yml` - Kafka + Zookeeper
 
 ---
 

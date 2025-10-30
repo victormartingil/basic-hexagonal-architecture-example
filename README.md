@@ -24,6 +24,7 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
 - **🏛️ ArchUnit Tests**: 21 tests que validan automáticamente las reglas arquitecturales
 - **📊 Diagramas Mermaid**: Visualizaciones profesionales en las guías (GitHub-friendly)
 - **🎯 CQRS Completo**: Ejemplos de Commands (Write) y Queries (Read)
+- **📡 Domain Events**: Spring Events (in-memory) + Kafka (integration events entre microservicios)
 - **📚 5000+ líneas de documentación**: Guías detalladas con ejemplos prácticos
 - **✅ 54 Tests**: Unit (10), Integration (23) y Architecture (21)
 - **🚀 CI/CD con GitHub Actions**: 5 workflows automatizados para validación continua
@@ -48,6 +49,8 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
 2. **[02-DDD-Guide.md](docs/02-DDD-Guide.md)** - Guía completa de Domain-Driven Design
    - ¿Qué es DDD?
    - Building Blocks (Entity, Value Object, Aggregate, etc.)
+   - **Domain Events vs Integration Events (Spring Events + Kafka)**
+   - Particiones, claves y ordenamiento en Kafka
    - Ejemplos prácticos con código del proyecto
    - Errores comunes
 

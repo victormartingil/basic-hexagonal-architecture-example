@@ -1,5 +1,11 @@
-# Docker Compose para levantar PostgreSQL
+# Docker Compose para levantar PostgreSQL + Kafka + Zookeeper
 # Uso: docker-compose up -d
+#
+# Servicios incluidos:
+# - PostgreSQL: Base de datos principal (puerto 5432)
+# - Zookeeper: Coordinación para Kafka (puerto 2181)
+# - Kafka: Message broker para integration events (puerto 9092)
+# - Kafka UI: Interfaz web para monitorear Kafka (puerto 8090)
 
 version: '3.8'
 
@@ -21,7 +27,74 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - hexarch-network
+
+  # Zookeeper (requerido por Kafka)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: hexarch-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - hexarch-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Kafka Message Broker
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: hexarch-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_NUM_PARTITIONS: 3
+    ports:
+      - "9092:9092"
+    networks:
+      - hexarch-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Kafka UI (opcional pero útil para debugging)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: hexarch-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: hexarch-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    ports:
+      - "8090:8080"
+    networks:
+      - hexarch-network
 
 volumes:
   postgres_data:
     driver: local
+
+networks:
+  hexarch-network:
+    driver: bridge

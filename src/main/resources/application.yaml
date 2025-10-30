@@ -84,6 +84,65 @@ spring:
       # Serializar fechas como timestamps ISO-8601 (no como números)
       write-dates-as-timestamps: false
 
+  # ===================================================================
+  # CONFIGURACIÓN DE KAFKA
+  # ===================================================================
+  kafka:
+    # Dirección del broker Kafka
+    # localhost:9092 para desarrollo local (docker-compose)
+    bootstrap-servers: localhost:9092
+
+    # Configuración del PRODUCER (publicar eventos)
+    producer:
+      # Serializar clave como String
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+      # Serializar valor como JSON
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+      # Propiedades adicionales del producer
+      properties:
+        # Habilitar idempotencia (evita duplicados en caso de reenvíos)
+        enable.idempotence: true
+
+        # Número de acknowledgments requeridos antes de considerar exitoso el envío
+        # all = esperar confirmación de todos los replicas (máxima durabilidad)
+        acks: all
+
+        # Número de reintentos en caso de error
+        retries: 3
+
+    # Configuración del CONSUMER (consumir eventos)
+    consumer:
+      # Deserializar clave como String
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+      # Deserializar valor desde JSON
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+
+      # Grupo de consumers
+      # Consumers con mismo group-id comparten la carga (load balancing)
+      group-id: hexarch-user-service
+
+      # Estrategia de lectura si no hay offset guardado
+      # earliest = leer desde el principio (útil para desarrollo/testing)
+      # latest = leer solo mensajes nuevos (útil para producción)
+      auto-offset-reset: earliest
+
+      # Propiedades adicionales del consumer
+      properties:
+        # Paquetes confiables para deserialización
+        # ⚠️ En producción, especifica paquetes exactos en lugar de "*"
+        # Ejemplo: spring.json.trusted.packages: com.example.hexarch.user.domain.event
+        spring.json.trusted.packages: "*"
+
+    # Configuración del LISTENER (@KafkaListener)
+    listener:
+      # Modo de confirmación de mensajes (ack)
+      # record = confirmar cada mensaje individualmente (más seguro)
+      # batch = confirmar lote completo (más performante)
+      ack-mode: record
+
 # ===================================================================
 # CONFIGURACIÓN DEL SERVIDOR
 # ===================================================================
