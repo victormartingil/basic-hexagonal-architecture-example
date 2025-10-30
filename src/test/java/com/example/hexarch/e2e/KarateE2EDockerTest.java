@@ -1,7 +1,6 @@
 package com.example.hexarch.e2e;
 
 import com.intuit.karate.junit5.Karate;
-import org.junit.jupiter.api.Disabled;
 
 /**
  * KARATE E2E TESTS - DOCKER MODE
@@ -88,25 +87,26 @@ public class KarateE2EDockerTest {
     /**
      * Ejecuta TODOS los tests E2E contra Docker Compose
      *
-     * IMPORTANTE: Este test está deshabilitado por defecto.
-     * Para ejecutarlo, comenta la anotación @Disabled y asegúrate de:
+     * IMPORTANTE: Este test requiere:
      * 1. Tener Docker Compose completo levantado (app + PostgreSQL + Kafka)
      * 2. La aplicación debe estar corriendo en el contenedor Docker
+     *
+     * Se ejecuta automáticamente en GitHub Actions con el modo "docker".
+     * Para ejecutar manualmente: ./mvnw test -Pe2e-tests-docker -Dkarate.env=docker
      */
-    @Disabled("E2E tests requieren Docker Compose corriendo - ejecutar manualmente")
     @Karate.Test
     Karate testAll() {
         // System property para configurar el entorno
         System.setProperty("karate.env", "docker");
 
-        // Ejecuta todos los .feature files
-        return Karate.run().relativeTo(getClass());
+        // Ejecuta todos los .feature files del subdirectorio user
+        return Karate.run("user").relativeTo(getClass());
     }
 
     /**
      * Ejecuta SOLO los tests de User contra Docker
+     * Útil para debugging de features específicas
      */
-    @Disabled("E2E tests requieren Docker Compose corriendo - ejecutar manualmente")
     @Karate.Test
     Karate testUser() {
         System.setProperty("karate.env", "docker");

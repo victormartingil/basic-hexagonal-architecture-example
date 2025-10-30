@@ -1,11 +1,18 @@
-name: E2E Tests (with Docker Compose)
+name: E2E Tests (Testcontainers + Docker Compose)
 
 # ============================================================================
 # CONFIGURACIÓN DE TRIGGERS
 # ============================================================================
 #
-# Este workflow ejecuta tests E2E completos con docker-compose.
-# Está configurado para ejecutarse SOLO MANUALMENTE por defecto.
+# Este workflow ejecuta tests E2E con DOS modos:
+# - MODO LOCAL (default): Testcontainers + @SpringBootTest (más rápido)
+# - MODO DOCKER: docker-compose completo (más realista)
+#
+# TRIGGERS CONFIGURADOS:
+# ✅ Pull Requests a main (modo LOCAL)
+# ✅ Manual desde GitHub UI (ambos modos)
+# ❌ Push a main (desactivado)
+# ❌ Scheduled (desactivado)
 #
 # ⚠️ IMPORTANTE - LÍMITES DE GITHUB ACTIONS:
 # - GitHub Free: 2000 minutos/mes (repos privados), ilimitado (públicos)
@@ -21,9 +28,9 @@ name: E2E Tests (with Docker Compose)
 # ✅ No consume minutos automáticamente
 # ✅ Ideal para validación antes de releases
 #
-# OPCIÓN 2: Automático en Pull Requests (DESACTIVADO)
-# Para activar, descomenta las líneas marcadas con [AUTO-PR]
-# ⚠️ Consumirá minutos en cada PR
+# OPCIÓN 2: Automático en Pull Requests (ACTIVADO ✅)
+# Se ejecuta automáticamente en PRs a main
+# ⚠️ Consumirá ~5 minutos en cada PR (modo LOCAL)
 #
 # OPCIÓN 3: Automático en Push a Main (DESACTIVADO)
 # Para activar, descomenta las líneas marcadas con [AUTO-MAIN]
@@ -54,15 +61,14 @@ on:
         default: false
         type: boolean
 
-  # ❌ DESACTIVADO: Ejecutar en Pull Requests
-  # [AUTO-PR] Descomenta las siguientes líneas para activar:
-  # pull_request:
-  #   branches: [ main ]
-  #   paths:
-  #     - 'src/**'
-  #     - 'pom.xml'
-  #     - 'docker-compose.yml'
-  #     - '.github/workflows/e2e-tests.yml'
+  # ✅ ACTIVADO: Ejecutar en Pull Requests
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'pom.xml'
+      - 'docker-compose.yml'
+      - '.github/workflows/e2e-tests.yml'
 
   # ❌ DESACTIVADO: Ejecutar en Push a Main
   # [AUTO-MAIN] Descomenta las siguientes líneas para activar:
@@ -188,7 +194,7 @@ jobs:
           echo "✅ Application ready!"
 
       - name: 🥒 Run E2E tests (Docker Mode)
-        run: ./mvnw test -Pe2e-tests -Dkarate.env=docker
+        run: ./mvnw test -Pe2e-tests-docker
         continue-on-error: false
 
       - name: 📊 Upload test results

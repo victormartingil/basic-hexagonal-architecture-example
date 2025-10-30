@@ -616,20 +616,31 @@ Prueban el flujo completo con Testcontainers (PostgreSQL + Embedded Kafka).
 - Dead Letter Topic (DLT)
 - Security con JWT end-to-end
 
-### **4. E2E Tests con Karate** - Contra app corriendo
+### **4. E2E Tests con Karate** - Tests end-to-end completos
 
 ```bash
-# Ejecutar E2E tests contra localhost
-./mvnw test -Pe2e-tests-local
+# Ejecutar E2E tests con Testcontainers (RECOMENDADO - todo automático)
+./mvnw test -Pe2e-tests -Dkarate.env=local
 
-# Ejecutar E2E tests contra Docker
-./mvnw test -Pe2e-tests-docker
+# Ejecutar E2E tests contra Docker Compose
+./mvnw test -Pe2e-tests-docker -Dkarate.env=docker
+
+# Ejecutar con más logs (debugging)
+./mvnw test -Pe2e-tests -Dkarate.env=local -Dkarate.output.showLog=true
+
+# Pasar variables personalizadas
+./mvnw test -Pe2e-tests -Dkarate.baseUrl=http://localhost:9090
 ```
 
 **Qué prueban:**
 - Flujos de usuario completos (BDD con Gherkin)
 - Crear usuario → Obtener usuario → Validaciones
 - Tests de contrato de API
+- 10 scenarios end-to-end (happy paths + error cases)
+
+**Modos disponibles**:
+- **Testcontainers Mode** 🚀 (recomendado): Todo automático en un comando
+- **Docker Mode**: Validación final contra imagen Docker real
 
 **Ver guía completa**: [13-E2E-Testing-Karate.md](docs/13-E2E-Testing-Karate.md)
 
@@ -639,8 +650,8 @@ Prueban el flujo completo con Testcontainers (PostgreSQL + Embedded Kafka).
 |---------|------------------|-----------------|--------|-----|
 | `./mvnw test` | Unit + Architecture (100) | ❌ No | ~1-2 min | Build rápido, CI/CD |
 | `./mvnw test -Pintegration-tests` | Todos (116) | ✅ Sí | ~3-5 min | Validación completa |
-| `./mvnw test -Pe2e-tests-local` | E2E contra localhost | ❌ No | ~2-3 min | E2E rápido |
-| `./mvnw test -Pe2e-tests-docker` | E2E contra Docker | ✅ Sí | ~4-6 min | E2E realista |
+| `./mvnw test -Pe2e-tests` | E2E con Testcontainers | ❌ No | ~5 min | E2E automático 🚀 |
+| `./mvnw test -Pe2e-tests-docker` | E2E contra Docker | ✅ Sí | ~10 min | E2E realista |
 
 **Troubleshooting**: Si los tests fallan, consulta [14-Troubleshooting-Guide.md](docs/14-Troubleshooting-Guide.md)
 

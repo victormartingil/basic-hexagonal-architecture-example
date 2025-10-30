@@ -1,4 +1,4 @@
-name: Integration Tests (with Docker)
+name: Integration Tests (Testcontainers)
 
 on:
   # Ejecutar manualmente desde GitHub UI

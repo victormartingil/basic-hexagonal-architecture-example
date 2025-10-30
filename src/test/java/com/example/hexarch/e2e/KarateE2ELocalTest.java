@@ -60,8 +60,8 @@ public class KarateE2ELocalTest {
         // System property para configurar el entorno
         System.setProperty("karate.env", "local");
 
-        // Ejecuta todos los .feature files en com/example/hexarch/e2e
-        return Karate.run().relativeTo(getClass());
+        // Ejecuta todos los .feature files del subdirectorio user
+        return Karate.run("user").relativeTo(getClass());
     }
 
     /**

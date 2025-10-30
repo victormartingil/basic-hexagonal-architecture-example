@@ -32,7 +32,7 @@
 		<openapi-generator.version>7.2.0</openapi-generator.version>
 		<springdoc.version>2.3.0</springdoc.version>
 		<archunit.version>1.3.0</archunit.version>
-		<karate.version>1.4.1</karate.version>
+		<karate.version>1.5.0</karate.version>
 
 		<!-- Code Quality -->
 		<jacoco.version>0.8.12</jacoco.version>
@@ -225,9 +225,9 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- Karate para E2E tests -->
+		<!-- Karate para E2E tests (v1.5.0+ usa groupId io.karatelabs) -->
 		<dependency>
-			<groupId>com.intuit.karate</groupId>
+			<groupId>io.karatelabs</groupId>
 			<artifactId>karate-junit5</artifactId>
 			<version>${karate.version}</version>
 			<scope>test</scope>
@@ -316,6 +316,20 @@
 						<!-- Excluye integration tests por defecto (requieren Docker) -->
 						<exclude>**/*IntegrationTest.java</exclude>
 					</excludes>
+					<!-- Argumentos JVM para compatibilidad con Java 21 y GraalVM (Karate) -->
+					<argLine>
+						--add-opens=java.base/java.lang=ALL-UNNAMED
+						--add-opens=java.base/java.util=ALL-UNNAMED
+						--add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+						--add-opens=java.base/java.io=ALL-UNNAMED
+						--add-opens=java.base/sun.misc=ALL-UNNAMED
+						@{argLine}
+					</argLine>
+					<!-- System properties para Karate -->
+					<systemPropertyVariables>
+						<!-- Desactivar GraalVM en Karate para compatibilidad con Java 21 -->
+						<karate.graal>false</karate.graal>
+					</systemPropertyVariables>
 					<!-- Variables de entorno para Testcontainers -->
 					<environmentVariables>
 						<!-- Desactivar ryuk para compatibilidad con Rancher Desktop -->
@@ -433,6 +447,63 @@
 								<!-- Ryuk es un contenedor de limpieza que falla con Rancher Desktop -->
 								<TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
 							</environmentVariables>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- Profile para ejecutar E2E Tests con Testcontainers (recomendado) -->
+		<profile>
+			<id>e2e-tests</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<!-- Solo ejecutar el test E2E con Testcontainers -->
+							<excludes>
+								<exclude>none</exclude>
+							</excludes>
+							<includes>
+								<include>**/KarateE2ETestcontainersTest.java</include>
+							</includes>
+							<!-- Variables de entorno para Testcontainers -->
+							<environmentVariables>
+								<!-- Desactivar ryuk para compatibilidad con Rancher Desktop -->
+								<TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+							</environmentVariables>
+							<!-- System properties para Karate -->
+							<systemPropertyVariables>
+								<karate.env>local</karate.env>
+							</systemPropertyVariables>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- Profile para ejecutar E2E Tests contra Docker Compose -->
+		<profile>
+			<id>e2e-tests-docker</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<!-- Solo ejecutar el test E2E contra Docker -->
+							<excludes>
+								<exclude>none</exclude>
+							</excludes>
+							<includes>
+								<include>**/KarateE2EDockerTest.java</include>
+							</includes>
+							<!-- System properties para Karate -->
+							<systemPropertyVariables>
+								<karate.env>docker</karate.env>
+							</systemPropertyVariables>
 						</configuration>
 					</plugin>
 				</plugins>

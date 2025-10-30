@@ -92,6 +92,9 @@ public class SecurityConfig {
     @Value("${cors.allowed-origins:http://localhost:3000,http://localhost:4200}")
     private String allowedOrigins;
 
+    @Value("${security.enabled:true}")
+    private boolean securityEnabled;
+
     /**
      * Configura la cadena de filtros de seguridad
      *
@@ -124,10 +127,16 @@ public class SecurityConfig {
                 //    No crear sesiones HTTP, cada request debe tener JWT
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                )
+                );
 
-                // 4. Configurar autorización por endpoint
-                .authorizeHttpRequests(auth -> auth
+        // 4. Configurar autorización según security.enabled
+        if (!securityEnabled) {
+            // MODO TEST: Permitir todos los requests sin autenticación
+            // Usado en E2E tests para validar funcionalidad sin JWT
+            http.authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+        } else {
+            // MODO PRODUCCIÓN: Aplicar reglas de seguridad normales
+            http.authorizeHttpRequests(auth -> auth
                         // ========== ENDPOINTS PÚBLICOS (sin autenticación) ==========
 
                         // Actuator health endpoint (para healthchecks de K8s, Docker, etc.)
@@ -166,6 +175,7 @@ public class SecurityConfig {
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
                 );
+        }
 
         return http.build();
     }

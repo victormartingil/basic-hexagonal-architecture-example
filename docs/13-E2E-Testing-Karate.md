@@ -442,17 +442,21 @@ Scenario: Create user with invalid email should fail
 ### 6.1. Estructura de Archivos
 
 ```
-src/test/java/
-├── karate-config.js                 ← Configuración global de Karate
+src/test/
+├── java/com/example/hexarch/e2e/
+│   ├── KarateE2ELocalTest.java          ← Runner para tests contra localhost
+│   ├── KarateE2EDockerTest.java         ← Runner contra Docker Compose
+│   └── KarateE2ETestcontainersTest.java ← Runner con Testcontainers (recomendado)
 │
-├── com/example/hexarch/e2e/
-│   ├── KarateE2ELocalTest.java      ← Runner para tests contra localhost
-│   ├── KarateE2EDockerTest.java     ← Runner para tests contra Docker
-│   │
-│   └── user/                         ← Feature files por bounded context
-│       ├── create-user.feature       ← Scenarios para CreateUser
-│       └── get-user.feature          ← Scenarios para GetUser
+└── resources/
+    ├── karate-config.js                 ← Configuración global de Karate
+    │
+    └── com/example/hexarch/e2e/user/    ← Feature files por bounded context
+        ├── create-user.feature          ← 5 scenarios para CreateUser
+        └── get-user.feature             ← 5 scenarios para GetUser
 ```
+
+**⚠️ IMPORTANTE**: Los archivos `.feature` deben estar en `src/test/resources/`, no en `src/test/java/`.
 
 ### 6.2. karate-config.js
 
@@ -467,21 +471,55 @@ function fn() {
     }
   };
 
-  var env = karate.env; // Sistema property: karate.env
+  var env = karate.env; // System property: karate.env
+  karate.log('karate.env system property was:', env);
+
+  if (!env) {
+    env = 'local'; // default si no se especifica
+  }
 
   if (env === 'local') {
-    config.baseUrl = 'http://localhost:8080';
+    // IMPORTANTE: Soporta baseUrl dinámica para Testcontainers
+    var systemBaseUrl = karate.properties['karate.baseUrl'];
+    if (systemBaseUrl) {
+      config.baseUrl = systemBaseUrl;
+      karate.log('Using dynamic baseUrl from system property:', config.baseUrl);
+    } else {
+      config.baseUrl = 'http://localhost:8080';
+      karate.log('Running E2E tests against LOCAL environment:', config.baseUrl);
+    }
   } else if (env === 'docker') {
     config.baseUrl = 'http://localhost:8080';
+    karate.log('Running E2E tests against DOCKER environment:', config.baseUrl);
+  } else if (env === 'ci') {
+    config.baseUrl = 'http://localhost:8080';
+    karate.log('Running E2E tests in CI environment:', config.baseUrl);
   }
+
+  // Configuración de timeouts
+  karate.configure('connectTimeout', 10000); // 10 segundos
+  karate.configure('readTimeout', 10000);    // 10 segundos
+
+  // Log level (para debugging)
+  karate.configure('logPrettyRequest', true);
+  karate.configure('logPrettyResponse', true);
 
   return config;
 }
 ```
 
 **Variables disponibles en todos los scenarios**:
-- `baseUrl`: URL base de la API
+- `baseUrl`: URL base de la API (puede ser dinámica con Testcontainers)
 - `headers`: Headers comunes para todos los requests
+
+**Cómo pasar variables personalizadas**:
+```bash
+# Pasar baseUrl personalizada
+./mvnw test -Pe2e-tests -Dkarate.env=local -Dkarate.baseUrl=http://localhost:9090
+
+# Pasar múltiples variables
+./mvnw test -Pe2e-tests -Dkarate.env=docker -Dkarate.apiKey=secret123
+```
 
 ### 6.3. Feature File (create-user.feature)
 
@@ -657,26 +695,46 @@ docker logs hexarch-app --follow
 **¿Cómo funciona internamente?**
 
 ```java
-@SpringBootTest(webEnvironment = RANDOM_PORT)  // ← App en puerto aleatorio
-@Testcontainers  // ← Testcontainers maneja infraestructura
-class KarateE2ETestcontainersTest {
-
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
-
-    @Container
-    static KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = {
+        "spring.kafka.enabled=false",  // ← Deshabilitar Kafka para tests REST
+        "security.enabled=false"        // ← Deshabilitar security para simplificar
+    }
+)
+@Testcontainers
+public class KarateE2ETestcontainersTest {
 
     @LocalServerPort  // ← Puerto aleatorio de Spring Boot
     private int port;
 
-    @Test
-    void runE2ETests() {
-        // Karate hace HTTP requests a http://localhost:{port}
-        // La app usa PostgreSQL y Kafka de Testcontainers
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
+            .withDatabaseName("testdb")
+            .withUsername("test")
+            .withPassword("test");
+
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
+    }
+
+    @Karate.Test
+    Karate testUser() {
+        // Configurar la URL dinámica con el puerto aleatorio
+        String baseUrl = "http://localhost:" + port;
+        System.setProperty("karate.baseUrl", baseUrl);
+        System.setProperty("karate.env", "local");
+
+        // Ejecutar todos los .feature files en el directorio user
+        return Karate.run("user").relativeTo(getClass());
     }
 }
 ```
+
+**⚠️ IMPORTANTE sobre Kafka**: En los E2E tests, Kafka está DESHABILITADO porque solo estamos validando endpoints REST. La aplicación funciona sin Kafka gracias a `spring.kafka.enabled=false`.
 
 **Ventajas** (por eso es RECOMENDADO):
 - ⚡ **Todo automático**: Un solo comando
@@ -740,11 +798,30 @@ Porque desde la perspectiva de **Karate**, está haciendo requests a `localhost`
 ### 7.5. Ejecutar UN SOLO Scenario (debugging)
 
 ```bash
-# Ejecutar solo un feature file específico
-./mvnw test -Dtest=KarateE2ELocalTest#testCreateUser -Dkarate.env=local
+# Ejecutar solo el test de Testcontainers
+./mvnw test -Dtest=KarateE2ETestcontainersTest -Dkarate.env=local
+
+# Ejecutar solo el test de Docker
+./mvnw test -Dtest=KarateE2EDockerTest -Dkarate.env=docker
 
 # Ejecutar con más logs (debugging)
-./mvnw test -Dtest=KarateE2ELocalTest -Dkarate.env=local -Dkarate.options="--tags @debug"
+./mvnw test -Dtest=KarateE2ETestcontainersTest -Dkarate.env=local -Dkarate.output.showLog=true
+
+# Ejecutar con tags específicos
+./mvnw test -Pe2e-tests -Dkarate.env=local -Dkarate.options="--tags @smoke"
+```
+
+### 7.5.1. Pasar Variables Personalizadas
+
+```bash
+# Pasar baseUrl personalizada
+./mvnw test -Pe2e-tests -Dkarate.baseUrl=http://localhost:9090
+
+# Pasar múltiples propiedades
+./mvnw test -Pe2e-tests -Dkarate.env=local -Dkarate.apiKey=secret -Dkarate.timeout=30000
+
+# Desde karate-config.js, acceder con:
+var apiKey = karate.properties['karate.apiKey'];
 ```
 
 ### 7.6. Ejecutar en Paralelo (más rápido)
@@ -941,7 +1018,46 @@ Scenario: User test
 
 ## 10. Troubleshooting
 
-### 10.1. Error: "Connection refused"
+### 10.1. Error: Java 21 - GraalVM Compatibility Issues
+
+**Problema**: Al ejecutar tests con Java 21, aparecen errores relacionados con GraalVM:
+```
+java.lang.NoSuchMethodError: 'void sun.misc.Unsafe.ensureClassInitialized(java.lang.Class)'
+```
+
+**Solución**: Este proyecto usa **Karate 1.5.0** con el nuevo groupId `io.karatelabs` que es compatible con Java 21.
+
+**Verificar en `pom.xml`**:
+```xml
+<properties>
+    <karate.version>1.5.0</karate.version>
+</properties>
+
+<dependency>
+    <groupId>io.karatelabs</groupId>  <!-- ← Nuevo groupId -->
+    <artifactId>karate-junit5</artifactId>
+    <version>${karate.version}</version>
+</dependency>
+```
+
+**Nota**: Karate 1.4.1 con `com.intuit.karate` NO es compatible con Java 21. Debes usar 1.5.0+ con `io.karatelabs`.
+
+**Configuración adicional en `pom.xml` (maven-surefire-plugin)**:
+```xml
+<argLine>
+    --add-opens=java.base/java.lang=ALL-UNNAMED
+    --add-opens=java.base/java.util=ALL-UNNAMED
+    --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+    --add-opens=java.base/java.io=ALL-UNNAMED
+    --add-opens=java.base/sun.misc=ALL-UNNAMED
+    @{argLine}
+</argLine>
+<systemPropertyVariables>
+    <karate.graal>false</karate.graal>  <!-- Desactivar GraalVM -->
+</systemPropertyVariables>
+```
+
+### 10.2. Error: "Connection refused"
 
 **Problema**: Karate no puede conectarse a la API.
 
@@ -955,7 +1071,40 @@ docker ps | grep postgres
 docker ps | grep kafka
 ```
 
-### 10.2. Error: Tests pasan individualmente pero fallan en paralelo
+### 10.3. Error: "not found: com/example/hexarch/e2e/user.feature"
+
+**Problema**: Karate no encuentra los archivos `.feature`.
+
+**Causa**: Los archivos `.feature` están en la ubicación incorrecta o el código Java usa la ruta incorrecta.
+
+**Solución**:
+
+1. **Verificar ubicación**: Los `.feature` deben estar en `src/test/resources/com/example/hexarch/e2e/user/`
+2. **Verificar código Java**: Usar `relativeTo(getClass())` correctamente:
+
+```java
+// ✅ CORRECTO: Especificar subdirectorio
+return Karate.run("user").relativeTo(getClass());
+
+// ❌ INCORRECTO: Sin subdirectorio cuando están en subcarpeta
+return Karate.run().relativeTo(getClass());
+
+// ❌ INCORRECTO: Usar classpath con Runner.path()
+return Runner.path("classpath:com/example/hexarch/e2e/user");
+```
+
+3. **Estructura esperada**:
+```
+src/test/java/com/example/hexarch/e2e/
+└── KarateE2ETestcontainersTest.java  ← getClass() apunta aquí
+
+src/test/resources/com/example/hexarch/e2e/
+└── user/
+    ├── create-user.feature            ← Karate.run("user") busca aquí
+    └── get-user.feature
+```
+
+### 10.4. Error: Tests pasan individualmente pero fallan en paralelo
 
 **Problema**: Tests tienen dependencias compartidas (ej: mismo username).
 
@@ -966,7 +1115,7 @@ docker ps | grep kafka
 * def username = 'user_' + timestamp
 ```
 
-### 10.3. Error: "Schema validation failed"
+### 10.5. Error: "Schema validation failed"
 
 **Problema**: El response no coincide con el matcher.
 
@@ -979,14 +1128,41 @@ And match response.id == 'some-id'
 And match response.id == '#uuid'
 ```
 
-### 10.4. Ver Logs Detallados
+### 10.6. Error: Match failed - Expected "Bad Request" but got "Validation Error"
+
+**Problema**: Los tests fallan porque el campo `error` en la respuesta no coincide.
+
+**Causa**: La aplicación puede devolver diferentes mensajes de error según la configuración de validación.
+
+**Solución**: Actualizar los tests para que coincidan con la respuesta real de la API:
+
+```gherkin
+# ❌ ANTES (puede fallar)
+Then status 400
+And match response.error == 'Bad Request'
+
+# ✅ DESPUÉS (correcto)
+Then status 400
+And match response.error == 'Validation Error'
+
+# ✅ ALTERNATIVA: Validar solo el status code
+Then status 400
+And match response.status == 400
+```
+
+**Tip**: Ejecuta los tests en modo debug para ver la respuesta exacta:
+```bash
+./mvnw test -Pe2e-tests -Dkarate.env=local -Dkarate.output.showLog=true
+```
+
+### 10.7. Ver Logs Detallados
 
 ```bash
 # Ejecutar con logs de Karate
 ./mvnw test -Dtest=KarateE2ELocalTest -Dkarate.env=local -Dkarate.output.showLog=true
 ```
 
-### 10.5. Ver Reports HTML
+### 10.8. Ver Reports HTML
 
 Después de ejecutar los tests, Karate genera reports HTML:
 

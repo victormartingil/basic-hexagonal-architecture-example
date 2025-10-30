@@ -20,8 +20,16 @@ function fn() {
   // Configuración por entorno
   if (env === 'local') {
     // Tests contra aplicación corriendo en localhost
-    config.baseUrl = 'http://localhost:8080';
-    karate.log('Running E2E tests against LOCAL environment:', config.baseUrl);
+    // IMPORTANTE: Cuando se usa con Testcontainers, el puerto es aleatorio
+    // y se configura desde el test via System property 'karate.baseUrl'
+    var systemBaseUrl = karate.properties['karate.baseUrl'];
+    if (systemBaseUrl) {
+      config.baseUrl = systemBaseUrl;
+      karate.log('Using dynamic baseUrl from system property:', config.baseUrl);
+    } else {
+      config.baseUrl = 'http://localhost:8080';
+      karate.log('Running E2E tests against LOCAL environment:', config.baseUrl);
+    }
   } else if (env === 'docker') {
     // Tests contra Docker Compose stack
     // Ajusta el host según tu configuración de Docker

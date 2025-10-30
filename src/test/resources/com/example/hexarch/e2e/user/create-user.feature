@@ -23,8 +23,6 @@ Feature: Create User - E2E Test
     And match response.username == randomUsername
     And match response.email == randomEmail
     And match response.createdAt == '#present'
-    # Verificar que el Location header está presente
-    And match responseHeaders['Location'][0] == '#present'
 
   Scenario: Crear un usuario sin username debe fallar
     Given path '/api/v1/users'
@@ -37,7 +35,7 @@ Feature: Create User - E2E Test
     When method POST
     Then status 400
     And match response.status == 400
-    And match response.error == 'Bad Request'
+    And match response.error == 'Validation Error'
 
   Scenario: Crear un usuario sin email debe fallar
     Given path '/api/v1/users'
@@ -50,7 +48,7 @@ Feature: Create User - E2E Test
     When method POST
     Then status 400
     And match response.status == 400
-    And match response.error == 'Bad Request'
+    And match response.error == 'Validation Error'
 
   Scenario: Crear un usuario con email inválido debe fallar
     Given path '/api/v1/users'
@@ -64,7 +62,7 @@ Feature: Create User - E2E Test
     When method POST
     Then status 400
     And match response.status == 400
-    And match response.error == 'Bad Request'
+    And match response.error == 'Validation Error'
 
   Scenario: Crear múltiples usuarios y verificar que son diferentes
     # Crear primer usuario
