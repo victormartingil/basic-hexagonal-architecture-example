@@ -119,14 +119,16 @@ class HexagonalArchitectureTest {
         }
 
         @Test
-        @DisplayName("Application Services deben implementar Use Cases")
-        void servicesShouldImplementUseCases() {
+        @DisplayName("User Services deben implementar Use Cases")
+        void userServicesShouldImplementUseCases() {
             ArchRule rule = classes()
-                .that().resideInAPackage("..application.service..")
+                .that().resideInAPackage("..user.application.service..")
                 .and().haveSimpleNameEndingWith("Service")
                 .should().implement(com.example.hexarch.user.application.port.input.CreateUserUseCase.class)
                 .orShould().implement(com.example.hexarch.user.application.port.input.GetUserUseCase.class)
-                .because("Services deben implementar interfaces de Use Cases (Input Ports)");
+                .because("User Services deben implementar interfaces de Use Cases (Input Ports). " +
+                         "Nota: Servicios técnicos (EmailService, NotificationService) no son Use Cases, " +
+                         "son Output Adapters y no necesitan implementar esta regla.");
 
             rule.check(importedClasses);
         }

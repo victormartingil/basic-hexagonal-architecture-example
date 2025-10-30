@@ -78,27 +78,20 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
    - Respuestas a preguntas frecuentes
    - Proceso de decisión (checklist)
 
-5. **[05-Bibliografia.md](docs/05-Bibliografia.md)** - Libros y Recursos Recomendados
-   - Los 5 libros imprescindibles
-   - Libros por tema (DDD, Clean Code, Testing, Java)
-   - Artículos esenciales
-   - Blogs y canales de YouTube
-   - Recursos en español
-   - Ruta de aprendizaje recomendada
+### Guías de Prácticas y Convenciones
 
-### Guías de Calidad de Código
+5. **[05-Conventional-Commits-Guide.md](docs/05-Conventional-Commits-Guide.md)** - 📝 Conventional Commits
+   - ¿Qué son los Conventional Commits?
+   - Formato completo: tipo(scope): [ticket] descripción
+   - Tipos de commits (feat, fix, docs, refactor, etc.)
+   - 100+ ejemplos prácticos por categoría
+   - Pre-commit hooks automáticos
+   - Integración con herramientas (semantic-release, changelog)
+   - Best practices y errores comunes
 
-6. **[06-Code-Quality-JaCoCo-SonarQube.md](docs/06-Code-Quality-JaCoCo-SonarQube.md)** - Code Quality y Testing
-   - ✅ JaCoCo: Cómo funciona y cómo medir cobertura
-   - ✅ SonarQube/SonarCloud: Setup completo paso a paso
-   - ✅ Exclusiones: Qué excluir y por qué
-   - ✅ Reglas y Quality Gates personalizados
-   - ✅ Interpretación de métricas y reportes
-   - ✅ Troubleshooting y mejores prácticas
+### Guías de Implementación
 
-### Guías de Seguridad
-
-7. **[08-Spring-Security-JWT.md](docs/08-Spring-Security-JWT.md)** - 🔐 Spring Security + JWT
+6. **[06-Spring-Security-JWT.md](docs/06-Spring-Security-JWT.md)** - 🔐 Spring Security + JWT
    - ✅ Conceptos: Autenticación vs Autorización, Stateless vs Stateful
    - ✅ ¿Qué es JWT?: Estructura, firma, funcionamiento con diagramas
    - ✅ Spring Security: Arquitectura de filtros, SecurityContext
@@ -109,14 +102,211 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
    - ✅ Best Practices: Secret key, HTTPS, refresh tokens
    - ✅ Troubleshooting: Solución a errores comunes
 
+### Guías de Calidad de Código
+
+7. **[07-Code-Quality-JaCoCo-SonarQube.md](docs/07-Code-Quality-JaCoCo-SonarQube.md)** - Code Quality y Testing
+   - ✅ JaCoCo: Cómo funciona y cómo medir cobertura
+   - ✅ SonarQube/SonarCloud: Setup completo paso a paso
+   - ✅ Exclusiones: Qué excluir y por qué
+   - ✅ Reglas y Quality Gates personalizados
+   - ✅ Interpretación de métricas y reportes
+   - ✅ Troubleshooting y mejores prácticas
+
+### Recursos y Referencias
+
+8. **[08-Bibliografia.md](docs/08-Bibliografia.md)** - 📚 Libros y Recursos Recomendados
+   - Los 5 libros imprescindibles
+   - Libros por tema (DDD, Clean Code, Testing, Java)
+   - Artículos esenciales
+   - Blogs y canales de YouTube
+   - Recursos en español
+   - Ruta de aprendizaje recomendada
+
 ### Para Desarrolladores con IA
 
-8. **[.ai-guidelines.md](.ai-guidelines.md)** - Guidelines para GitHub Copilot, Cursor, Claude
+9. **[.ai-guidelines.md](.ai-guidelines.md)** - Guidelines para GitHub Copilot, Cursor, Claude
    - Reglas arquitecturales obligatorias
    - Nomenclatura exacta a seguir
    - Patrones de implementación
    - Checklist de validación
    - Usa este archivo como contexto para AIs que trabajen en el proyecto
+
+---
+
+## 🎓 Cómo Aprender con Este Repositorio
+
+Este repositorio está diseñado para el **aprendizaje autodidacta progresivo**. Cada guía está numerada y estructurada para construir conocimiento de forma incremental.
+
+### 📖 Orden de Estudio Recomendado
+
+#### **Fase 1: Fundamentos** (4-6 horas)
+Comprende los conceptos base antes de escribir código.
+
+1. **[01-Hexagonal-Architecture.md](docs/01-Hexagonal-Architecture.md)** - _Tiempo: 1-1.5h_
+   - Qué es Arquitectura Hexagonal (Ports & Adapters)
+   - Capas: Domain, Application, Infrastructure
+   - Inversión de dependencias
+   - **Acción**: Leer + Analizar estructura del proyecto User
+
+2. **[02-DDD-Tactical-Patterns.md](docs/02-DDD-Tactical-Patterns.md)** - _Tiempo: 1.5-2h_
+   - Value Objects, Entities, Aggregates
+   - Domain Events, Repository pattern
+   - **Acción**: Revisar User.java, Email.java, Username.java
+
+3. **[03-Testing-Strategies.md](docs/03-Testing-Strategies.md)** - _Tiempo: 1-1.5h_
+   - Pirámide de testing: Unit, Integration, E2E
+   - Testcontainers para integration tests
+   - **Acción**: Ejecutar `./mvnw test` y analizar tests
+
+4. **[04-Kafka-Integration.md](docs/04-Kafka-Integration.md)** - _Tiempo: 1-1.5h_
+   - Event-Driven Architecture con Kafka
+   - Dead Letter Topic (DLT) y Circuit Breaker
+   - **Acción**: Revisar KafkaProducerService y tests
+
+#### **Fase 2: Convenciones** (1 hora)
+Establece el estándar de código profesional.
+
+5. **[05-Conventional-Commits-Guide.md](docs/05-Conventional-Commits-Guide.md)** - _Tiempo: 30-45 min_
+   - Formato de commits: `type(scope): [TICKET-123] description`
+   - Semantic Versioning
+   - **Acción**: Revisar historial `git log --oneline`
+
+#### **Fase 3: Implementación Avanzada** (2-3 horas)
+Aplica seguridad y autenticación en microservicios.
+
+6. **[06-Spring-Security-JWT.md](docs/06-Spring-Security-JWT.md)** - _Tiempo: 2-2.5h_
+   - Spring Security Filter Chain
+   - JWT (JSON Web Tokens) stateless authentication
+   - Role-Based Access Control (RBAC)
+   - **Acción**: Ejecutar SecurityIntegrationTest, probar endpoints con Postman
+
+#### **Fase 4: Calidad de Código** (1-2 horas)
+Mide y asegura la calidad del código.
+
+7. **[07-Code-Quality-JaCoCo-SonarQube.md](docs/07-Code-Quality-JaCoCo-SonarQube.md)** - _Tiempo: 1-1.5h_
+   - JaCoCo: Cobertura de tests (85%+ required)
+   - SonarQube: Análisis estático de código
+   - **Acción**: Ejecutar `./mvnw clean verify`, revisar reportes
+
+#### **Fase 5: Referencias** (consulta según necesidad)
+Material complementario y recursos externos.
+
+8. **[08-Bibliografia.md](docs/08-Bibliografia.md)** - _Tiempo: Variable_
+   - Libros, artículos, videos
+   - Documentación oficial
+   - Cursos recomendados
+
+### 🎯 Rutas de Aprendizaje por Nivel
+
+#### **🟢 Junior (0-2 años experiencia)**
+**Objetivo**: Comprender los fundamentos y patrones básicos.
+
+- **Tiempo estimado**: 12-16 horas (distribuido en 2-3 semanas)
+- **Enfoque**: Leer guías 01-03 → Ejecutar tests → Leer código existente → Modificar pequeños cambios
+- **Recomendación**: No intentes implementar desde cero. Primero comprende el código existente.
+- **Práctica**:
+  1. Añadir un nuevo Value Object (ej: `PhoneNumber`)
+  2. Crear un nuevo endpoint simple (ej: `GET /api/users/count`)
+  3. Escribir tests unitarios para tus cambios
+
+#### **🟡 Mid-Level (2-5 años experiencia)**
+**Objetivo**: Comprender decisiones arquitectónicas y patrones avanzados.
+
+- **Tiempo estimado**: 8-12 horas (distribuido en 1-2 semanas)
+- **Enfoque**: Leer todas las guías → Analizar decisiones de diseño → Implementar nuevas features
+- **Recomendación**: Enfócate en el **por qué** de cada patrón, no solo en el **cómo**.
+- **Práctica**:
+  1. Implementar un nuevo Bounded Context (ej: `Product`)
+  2. Añadir circuit breaker a una nueva integración
+  3. Configurar autenticación JWT end-to-end
+
+#### **🔴 Senior (5+ años experiencia)**
+**Objetivo**: Evaluar arquitectura como template para producción.
+
+- **Tiempo estimado**: 4-6 horas (rápida lectura analítica)
+- **Enfoque**: Revisar decisiones arquitectónicas → Identificar trade-offs → Proponer mejoras
+- **Recomendación**: Cuestiona cada decisión. ¿Es válida para tu contexto empresarial?
+- **Evaluación**:
+  1. ¿La separación de capas es correcta para tu organización?
+  2. ¿El manejo de eventos escala para tu volumetría?
+  3. ¿La estrategia de testing cubre casos de producción?
+
+### 🧠 Conceptos Clave por Guía
+
+| Guía | Conceptos Principales | Dificultad |
+|------|----------------------|------------|
+| **01-Hexagonal** | Inversión de dependencias, Ports & Adapters, Capas limpias | ⭐⭐ |
+| **02-DDD** | Value Objects, Aggregates, Domain Events, Ubiquitous Language | ⭐⭐⭐ |
+| **03-Testing** | Test Pyramid, Testcontainers, Mocking vs Real dependencies | ⭐⭐ |
+| **04-Kafka** | Event-Driven, DLT, Circuit Breaker, Async processing | ⭐⭐⭐⭐ |
+| **05-Commits** | Conventional Commits, Semantic Versioning, Git best practices | ⭐ |
+| **06-Security** | JWT, Spring Security, Stateless auth, RBAC | ⭐⭐⭐⭐ |
+| **07-Quality** | Code coverage, Static analysis, Quality gates | ⭐⭐ |
+| **08-Bibliografia** | N/A - Material de consulta | N/A |
+
+### 🛠️ Patrones de Diseño Implementados
+
+Este proyecto demuestra los siguientes patrones enterprise:
+
+- **Hexagonal Architecture** (Ports & Adapters)
+- **Domain-Driven Design** (Tactical patterns)
+- **Repository Pattern** (abstracción de persistencia)
+- **Factory Pattern** (`User.create()`, `Email.of()`)
+- **Strategy Pattern** (múltiples adaptadores para mismo puerto)
+- **Observer Pattern** (Domain Events con Kafka)
+- **Command Query Responsibility Segregation (CQRS)** (separación UseCase Input/Output)
+- **Circuit Breaker Pattern** (resiliencia en eventos)
+- **Dead Letter Queue Pattern** (manejo de errores en eventos)
+
+### ✅ Mejores Prácticas Aplicadas
+
+El código sigue estándares de **empresas Fortune 500**:
+
+1. **Arquitectura**:
+   - ✅ Separación clara de responsabilidades (Domain, Application, Infrastructure)
+   - ✅ Inversión de dependencias (Dependency Inversion Principle)
+   - ✅ Código independiente de frameworks (Domain sin Spring)
+
+2. **Código Limpio**:
+   - ✅ Inmutabilidad por defecto (Records, `final` fields)
+   - ✅ Value Objects para validaciones de dominio
+   - ✅ Naming explicito (no abreviaturas, no comentarios innecesarios)
+
+3. **Testing**:
+   - ✅ Cobertura 85%+ (JaCoCo enforced)
+   - ✅ Tests independientes (no comparten estado)
+   - ✅ Tests de integración con infraestructura real (Testcontainers)
+
+4. **Seguridad**:
+   - ✅ Autenticación JWT stateless (no sesiones HTTP)
+   - ✅ Autorización por roles (RBAC)
+   - ✅ Secrets externalizados (application.yaml, nunca hardcoded)
+
+5. **Resiliencia**:
+   - ✅ Circuit Breaker para dependencias externas
+   - ✅ Dead Letter Topic para eventos fallidos
+   - ✅ Retry con backoff exponencial
+
+6. **Observabilidad**:
+   - ✅ Logs estructurados (SLF4J + Logback)
+   - ✅ Spring Actuator para health checks
+   - ✅ Métricas de código (SonarQube)
+
+### 💡 Consejos de Aprendizaje
+
+1. **Lee el código antes de ejecutarlo**: Intenta predecir qué hace cada clase.
+2. **Ejecuta los tests primero**: `./mvnw test` - Los tests son documentación viva.
+3. **Modifica y rompe cosas**: Cambia algo y ve qué test falla. Aprenderás las dependencias.
+4. **Usa `.ai-guidelines.md`**: Si trabajas con IAs (Claude, ChatGPT), este archivo les da el contexto completo.
+5. **Commit frecuentemente**: Practica Conventional Commits desde el inicio.
+
+### 📊 Tiempo Total Estimado
+
+- **Junior**: 12-16 horas (distribuir en 2-3 semanas)
+- **Mid-Level**: 8-12 horas (distribuir en 1-2 semanas)
+- **Senior**: 4-6 horas (lectura analítica intensiva)
+
+**Recomendación**: No intentes absorber todo en un día. La arquitectura limpia se aprende **practicando** iterativamente.
 
 ---
 
