@@ -1309,6 +1309,889 @@ kafka-console-consumer.sh \
 
 ---
 
+### ⚡ Circuit Breaker - Resiliencia ante Fallos
+
+**¿Qué es un Circuit Breaker?**
+
+Un Circuit Breaker (Disyuntor) es un patrón de resiliencia que **previene cascading failures** (fallos en cascada) cuando un servicio externo está caído o lento.
+
+**Analogía Simple:**
+
+Como el interruptor eléctrico de tu casa:
+- Hay un **cortocircuito** → el interruptor se **abre** automáticamente (protege)
+- Después de un tiempo → intentas **cerrarlo** (reconectar)
+- Si funciona → **sigue conectado** (CLOSED ✅)
+- Si sigue fallando → se vuelve a **abrir** (OPEN ❌)
+
+**Problema sin Circuit Breaker:**
+
+```java
+// Email Service está caído
+@KafkaListener(topics = "user.created")
+public void consume(UserCreatedEvent event) {
+    emailService.send(event.email());  // ❌ Timeout de 30 segundos cada vez
+}
+
+// Resultado:
+// 1. Cada mensaje espera 30s de timeout ⏱️
+// 2. Threads bloqueados esperando ❌
+// 3. Kafka consumer no procesa otros mensajes 🔄
+// 4. Todo el sistema se vuelve lento 💀
+// 5. Cascading failure: todo se cae ⚠️
+```
+
+**Solución con Circuit Breaker:**
+
+```java
+@Service
+public class EmailService {
+
+    @CircuitBreaker(name = "emailService", fallbackMethod = "sendEmailFallback")
+    public void sendWelcomeEmail(String email, String username) {
+        // Intenta enviar email
+        externalEmailService.send(email, username);
+    }
+
+    // Método fallback (se ejecuta si Circuit está OPEN)
+    private void sendEmailFallback(String email, String username, Exception ex) {
+        logger.warn("Circuit breaker OPEN - Email not sent");
+        // Guardar en cola para reintentar después
+        emailQueueRepository.save(new PendingEmail(email, username));
+    }
+}
+
+// Resultado:
+// 1. Primeras llamadas fallan → Circuit detecta alta tasa de fallos
+// 2. Circuit cambia a OPEN ✅
+// 3. Llamadas subsecuentes NO esperan timeout → Fail-fast ⚡
+// 4. Llama a fallback inmediatamente
+// 5. Threads liberados, sistema sigue funcionando ✅
+// 6. Después de N segundos → Circuit prueba reconectar (HALF_OPEN)
+```
+
+---
+
+#### Estados del Circuit Breaker
+
+El Circuit Breaker funciona como una **máquina de estados finitos** con 3 estados:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ CLOSED (Cerrado) - Estado Normal                             │
+│                                                               │
+│ • Todas las llamadas pasan al servicio ✅                    │
+│ • Monitorea tasa de fallos continuamente                     │
+│ • Si fallos >= threshold → Cambia a OPEN                     │
+│                                                               │
+│ Ejemplo:                                                      │
+│   10 llamadas → 2 fallos (20%) → Circuit sigue CLOSED        │
+│   10 llamadas → 6 fallos (60%) → Circuit cambia a OPEN ❌    │
+└──────────────┬───────────────────────────────────────────────┘
+               │ (demasiados fallos)
+               ↓
+┌──────────────┴───────────────────────────────────────────────┐
+│ OPEN (Abierto) - Protección Activa                           │
+│                                                               │
+│ • NO ejecuta el servicio ❌                                  │
+│ • Falla inmediatamente (fail-fast) ⚡                        │
+│ • Llama a método fallback                                    │
+│ • Después de timeout → Cambia a HALF_OPEN                    │
+│                                                               │
+│ Ejemplo:                                                      │
+│   Llamada 1 → Fallback inmediato (sin esperar timeout)       │
+│   Llamada 2 → Fallback inmediato                             │
+│   ... (pasan 10 segundos) ...                                │
+│   → Circuit cambia a HALF_OPEN para probar si se recuperó    │
+└──────────────┬───────────────────────────────────────────────┘
+               │ (después de waitDurationInOpenState)
+               ↓
+┌──────────────┴───────────────────────────────────────────────┐
+│ HALF_OPEN (Semi-abierto) - Probando Recuperación            │
+│                                                               │
+│ • Permite N llamadas de prueba (ej: 3)                       │
+│ • Si funcionan → Cambia a CLOSED ✅                          │
+│ • Si fallan → Vuelve a OPEN ❌                               │
+│                                                               │
+│ Ejemplo:                                                      │
+│   Llamada prueba 1 → ✅ Éxito                                │
+│   Llamada prueba 2 → ✅ Éxito                                │
+│   Llamada prueba 3 → ✅ Éxito                                │
+│   → Circuit cambia a CLOSED (servicio recuperado) ✅         │
+│                                                               │
+│   O bien:                                                     │
+│   Llamada prueba 1 → ❌ Fallo                                │
+│   Llamada prueba 2 → ❌ Fallo                                │
+│   → Circuit vuelve a OPEN (servicio aún caído) ❌            │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### Flujo Completo con Circuit Breaker
+
+**Escenario: Email Service se cae durante 1 minuto**
+
+```
+T=0s   UserEventsKafkaConsumer recibe 20 eventos
+       ↓
+       EmailService.sendWelcomeEmail(...)
+       ↓
+       Circuit Breaker está CLOSED (estado normal)
+       ↓
+       Llama a servicio externo de email
+       ↓
+T=1s   ❌ Fallo 1/10 (email service down)
+T=2s   ❌ Fallo 2/10
+T=3s   ❌ Fallo 3/10
+T=4s   ❌ Fallo 4/10
+T=5s   ❌ Fallo 5/10  → minimum-number-of-calls alcanzado
+T=6s   ❌ Fallo 6/10  → 60% failure rate (> 50% threshold)
+       ↓
+       ⚠️  Circuit Breaker detecta: "6/10 fallos = 60% > 50%"
+       ↓
+       Circuit cambia a OPEN ❌
+       ═════════════════════════════════════════════════════════
+
+T=7s   🔔 Llega evento 11
+       ↓
+       EmailService.sendWelcomeEmail(...)
+       ↓
+       Circuit Breaker está OPEN
+       ↓
+       ⚡ NO llama al servicio → Falla inmediatamente (fail-fast)
+       ↓
+       Ejecuta sendEmailFallback() → Guarda en cola
+       ↓
+       ✅ Consumer continúa sin bloquearse
+
+T=8s   🔔 Llega evento 12 → Fallback inmediato ⚡
+T=9s   🔔 Llega evento 13 → Fallback inmediato ⚡
+...
+T=17s  (Pasan 10 segundos en estado OPEN)
+       ↓
+       Circuit cambia a HALF_OPEN (probando recuperación)
+       ═════════════════════════════════════════════════════════
+
+T=18s  🔔 Llega evento 14 (llamada de prueba 1/3)
+       ↓
+       Circuit está HALF_OPEN → Permite llamada de prueba
+       ↓
+       ✅ Email service se recuperó → Éxito
+
+T=19s  🔔 Llega evento 15 (llamada de prueba 2/3)
+       ↓
+       ✅ Éxito
+
+T=20s  🔔 Llega evento 16 (llamada de prueba 3/3)
+       ↓
+       ✅ Éxito
+       ↓
+       Circuit detecta: "3/3 pruebas exitosas"
+       ↓
+       Circuit cambia a CLOSED ✅
+       ═════════════════════════════════════════════════════════
+
+T=21s  🔔 Eventos 17-20 → Todo funciona normal ✅
+```
+
+**Resumen:**
+- Eventos 1-10: Enviados con fallos (circuit CLOSED)
+- Eventos 11-13: Fallback inmediato, consumer no se bloquea (circuit OPEN)
+- Eventos 14-16: Pruebas de recuperación (circuit HALF_OPEN)
+- Eventos 17-20: Funcionamiento normal (circuit CLOSED)
+
+---
+
+#### Configuración en este Proyecto
+
+**pom.xml:**
+```xml
+<!-- Resilience4j (Circuit Breaker, Retry, Rate Limiter) -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-aop</artifactId>
+</dependency>
+<dependency>
+    <groupId>io.github.resilience4j</groupId>
+    <artifactId>resilience4j-spring-boot3</artifactId>
+    <version>2.1.0</version>
+</dependency>
+```
+
+**application.yaml:**
+```yaml
+resilience4j:
+  circuitbreaker:
+    instances:
+      emailService:  # Nombre del circuit breaker
+        # Tipo de ventana para calcular tasa de fallos
+        # COUNT_BASED = últimas N llamadas
+        # TIME_BASED = llamadas en últimos N segundos
+        sliding-window-type: COUNT_BASED
+
+        # Tamaño de la ventana deslizante
+        # Evalúa tasa de fallos sobre las últimas 10 llamadas
+        sliding-window-size: 10
+
+        # Número mínimo de llamadas antes de evaluar
+        # Si hay < 5 llamadas, NO abre el circuit (aunque todas fallen)
+        # Evita abrir circuit con datos insuficientes
+        minimum-number-of-calls: 5
+
+        # Porcentaje de fallos para abrir el circuit
+        # Si >= 50% de las últimas 10 llamadas fallan → OPEN
+        failure-rate-threshold: 50
+
+        # Tiempo en estado OPEN antes de cambiar a HALF_OPEN
+        # Después de 10s, permite llamadas de prueba
+        wait-duration-in-open-state: 10s
+
+        # Número de llamadas permitidas en HALF_OPEN
+        # Permite 3 llamadas de prueba para ver si se recuperó
+        permitted-number-of-calls-in-half-open-state: 3
+
+        # Tasa de llamadas lentas para considerar fallo
+        # Si >= 50% son lentas → también abre circuit
+        slow-call-rate-threshold: 50
+
+        # Duración para considerar una llamada "lenta"
+        # Si tarda > 5s → cuenta como fallo
+        slow-call-duration-threshold: 5s
+
+        # Exponer métricas en /actuator/health
+        register-health-indicator: true
+
+        # Excepciones que cuentan como fallos
+        record-exceptions:
+          - java.lang.RuntimeException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+```
+
+**Significado de los parámetros:**
+
+| Parámetro | Valor | Significado |
+|-----------|-------|-------------|
+| `sliding-window-size` | 10 | Evalúa últimas 10 llamadas |
+| `minimum-number-of-calls` | 5 | Necesita ≥5 llamadas para decidir |
+| `failure-rate-threshold` | 50% | Si ≥50% fallan → OPEN |
+| `wait-duration-in-open-state` | 10s | Espera 10s antes de HALF_OPEN |
+| `permitted-number-of-calls-in-half-open-state` | 3 | 3 pruebas en HALF_OPEN |
+| `slow-call-duration-threshold` | 5s | Si tarda >5s → cuenta como fallo |
+
+**Ejemplo de decisión:**
+
+```
+Llamadas: ✅ ✅ ❌ ✅ ❌ ❌ ❌ ❌ ✅ ❌
+          1  2  3  4  5  6  7  8  9  10
+
+Análisis:
+- Total llamadas: 10 ≥ minimum-number-of-calls (5) ✅
+- Fallos: 6/10 = 60%
+- 60% ≥ failure-rate-threshold (50%) ✅
+- Decisión: Circuit cambia a OPEN ❌
+```
+
+---
+
+#### Implementación en Código
+
+**EmailService.java:**
+```java
+package com.example.hexarch.notifications.application.service;
+
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+@Service
+public class EmailService {
+
+    private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
+
+    /**
+     * Envía email de bienvenida con protección de Circuit Breaker
+     *
+     * @CircuitBreaker:
+     *   - name: "emailService" (debe coincidir con application.yaml)
+     *   - fallbackMethod: se ejecuta si circuit está OPEN o si falla
+     */
+    @CircuitBreaker(name = "emailService", fallbackMethod = "sendEmailFallback")
+    public void sendWelcomeEmail(String email, String username) {
+        logger.info("📧 [EMAIL SERVICE] Sending welcome email to: {}", email);
+
+        // En producción: llamada a servicio externo
+        // sendGridClient.send(email, template);
+        // sesClient.sendEmail(request);
+        // mailgunClient.send(message);
+
+        // Este método puede lanzar excepciones:
+        // - RuntimeException (servicio caído)
+        // - TimeoutException (timeout)
+        // - IOException (red inestable)
+
+        externalEmailService.send(email, username);
+
+        logger.info("✅ [EMAIL SERVICE] Email sent successfully");
+    }
+
+    /**
+     * Método fallback: se ejecuta cuando Circuit está OPEN
+     *
+     * IMPORTANTE:
+     * - Debe tener la MISMA FIRMA que el método original
+     * - Más un parámetro Exception al final
+     * - NO debe lanzar excepciones
+     */
+    private void sendEmailFallback(String email, String username, Exception ex) {
+        logger.warn("⚠️  [EMAIL SERVICE - FALLBACK] Circuit breaker is OPEN");
+        logger.warn("    Email: {}", email);
+        logger.warn("    Reason: {}", ex != null ? ex.getMessage() : "Circuit breaker OPEN");
+
+        // OPCIONES EN PRODUCCIÓN:
+
+        // 1. Guardar en cola para reintentar después (recomendado)
+        emailQueueRepository.save(new PendingEmail(email, username, Instant.now()));
+        logger.info("Email queued for retry when service recovers");
+
+        // 2. Usar servicio alternativo
+        // try {
+        //     backupEmailService.send(email, username);
+        //     logger.info("Email sent via backup service");
+        // } catch (Exception e) {
+        //     logger.error("Backup service also failed");
+        // }
+
+        // 3. Enviar alerta
+        // if (isCritical(email)) {
+        //     alertService.sendAlert(
+        //         "Email Circuit Breaker OPEN",
+        //         "Failed to send email to: " + email,
+        //         AlertSeverity.HIGH
+        //     );
+        // }
+
+        // 4. Incrementar métrica
+        // meterRegistry.counter("email.circuit_breaker.fallback").increment();
+
+        logger.info("✅ [EMAIL SERVICE - FALLBACK] Request handled gracefully");
+    }
+}
+```
+
+**Integración con Kafka Consumer:**
+```java
+@Component
+public class UserEventsKafkaConsumer {
+
+    private final EmailService emailService;  // Con Circuit Breaker
+
+    public UserEventsKafkaConsumer(EmailService emailService) {
+        this.emailService = emailService;
+    }
+
+    @KafkaListener(topics = "user.created", groupId = "notifications-service")
+    public void consume(@Payload UserCreatedEvent event) {
+        logger.info("📨 Received UserCreatedEvent: {}", event);
+
+        try {
+            // ⚡ CIRCUIT BREAKER PROTECTION
+            // Esta llamada está protegida por Circuit Breaker
+            // Si EmailService falla repetidamente:
+            // 1. Circuit Breaker detecta tasa de fallos alta
+            // 2. Cambia a estado OPEN
+            // 3. Llama a sendEmailFallback() en lugar de sendWelcomeEmail()
+            // 4. Consumer NO se bloquea esperando timeouts
+            // 5. Puede seguir procesando otros mensajes ✅
+            emailService.sendWelcomeEmail(event.email(), event.username());
+
+            logger.info("✅ Notification sent successfully");
+
+        } catch (Exception e) {
+            // Circuit Breaker ya manejó el fallo con fallback
+            // Aquí decides qué hacer con el mensaje de Kafka:
+
+            // Opción 1: NO lanzar excepción → Kafka avanza offset (mensaje "se pierde")
+            logger.error("Failed to process notification: {}", e.getMessage());
+
+            // Opción 2: Lanzar excepción → Kafka reintenta o envía a DLT
+            // throw new RuntimeException("Failed to process notification", e);
+        }
+    }
+}
+```
+
+---
+
+#### Ventajas del Circuit Breaker
+
+**1. Fail-Fast (Fallo Rápido)**
+```java
+// Sin Circuit Breaker:
+emailService.send(email);  // Espera 30s de timeout ⏱️
+
+// Con Circuit Breaker (en estado OPEN):
+emailService.send(email);  // Falla en ~1ms ⚡
+```
+
+**2. Protección de Recursos**
+```
+Sin Circuit Breaker:
+- Thread 1: bloqueado 30s esperando timeout
+- Thread 2: bloqueado 30s esperando timeout
+- Thread 3: bloqueado 30s esperando timeout
+- ...
+- Thread pool exhausted ❌
+- Sistema completo bloqueado ❌
+
+Con Circuit Breaker (OPEN):
+- Thread 1: falla en 1ms, liberado inmediatamente ✅
+- Thread 2: falla en 1ms, liberado inmediatamente ✅
+- Thread 3: falla en 1ms, liberado inmediatamente ✅
+- ...
+- Thread pool disponible ✅
+- Sistema sigue funcionando ✅
+```
+
+**3. Permite que Servicios se Recuperen**
+```
+Email Service está caído:
+- Sin Circuit Breaker: bombardeado con requests
+  → No puede recuperarse (overload)
+
+- Con Circuit Breaker: requests bloqueados (OPEN state)
+  → Servicio tiene tiempo para recuperarse
+  → Circuit prueba reconexión gradualmente (HALF_OPEN)
+```
+
+**4. Graceful Degradation (Degradación Elegante)**
+```java
+// Sistema sigue funcionando con funcionalidad reducida
+@CircuitBreaker(fallbackMethod = "sendEmailFallback")
+public void sendWelcomeEmail(String email, String username) {
+    externalEmailService.send(email, username);
+}
+
+// Fallback: guardar para enviar después
+private void sendEmailFallback(String email, String username, Exception ex) {
+    emailQueueRepository.save(new PendingEmail(email, username));
+    // Usuario fue creado ✅ (email se enviará después)
+}
+```
+
+**5. Previene Cascading Failures**
+```
+          ┌────────────┐
+          │   USER     │
+          │  SERVICE   │
+          └─────┬──────┘
+                │
+                ↓
+       ┌────────┴───────┐
+       │ NOTIFICATIONS  │  ← Circuit Breaker aquí ⚡
+       │    SERVICE     │
+       └────────┬───────┘
+                │
+                ↓
+       ┌────────┴───────┐
+       │  EMAIL SERVICE │  ← Caído ❌
+       │   (SendGrid)   │
+       └────────────────┘
+
+Sin Circuit Breaker:
+- Email Service caído → Notifications bloqueado → User Service bloqueado
+- Todo el sistema se cae ❌
+
+Con Circuit Breaker:
+- Email Service caído → Circuit se abre → Notifications usa fallback
+- User Service y Notifications siguen funcionando ✅
+```
+
+---
+
+#### Cuándo Usar Circuit Breaker
+
+**✅ USA Circuit Breaker cuando:**
+
+1. **Llamadas a Servicios Externos**
+   ```java
+   @CircuitBreaker(name = "sendgrid")
+   public void sendEmail() { sendGridClient.send(...); }
+
+   @CircuitBreaker(name = "stripe")
+   public void processPayment() { stripeClient.charge(...); }
+
+   @CircuitBreaker(name = "s3")
+   public void uploadFile() { s3Client.putObject(...); }
+   ```
+
+2. **Llamadas entre Microservicios**
+   ```java
+   @CircuitBreaker(name = "userService")
+   public User getUser(Long id) { restTemplate.get("/users/" + id); }
+
+   @CircuitBreaker(name = "inventoryService")
+   public Stock getStock(Long productId) { inventoryClient.getStock(productId); }
+   ```
+
+3. **Operaciones que Pueden Fallar por Red/Disponibilidad**
+   ```java
+   @CircuitBreaker(name = "database")
+   public List<User> findAll() { jdbcTemplate.query(...); }  // BD remota
+
+   @CircuitBreaker(name = "cache")
+   public String getValue(String key) { redisTemplate.get(key); }  // Redis remoto
+   ```
+
+4. **Integraciones con Third-Party Services**
+   ```java
+   @CircuitBreaker(name = "twilio")
+   public void sendSMS() { twilioClient.send(...); }
+
+   @CircuitBreaker(name = "google-maps")
+   public Location geocode(String address) { mapsClient.geocode(address); }
+   ```
+
+**❌ NO USES Circuit Breaker cuando:**
+
+1. **Lógica de Negocio Local**
+   ```java
+   // NO ❌
+   @CircuitBreaker(name = "validation")
+   public void validateUser(User user) {
+       if (user.getEmail() == null) throw new ValidationException();
+   }
+   ```
+
+2. **Operaciones que DEBEN Ejecutarse Siempre**
+   ```java
+   // NO ❌
+   @CircuitBreaker(name = "createOrder")
+   public Order createOrder(CreateOrderCommand command) {
+       // Crear orden es crítico, no puede fallar con fallback
+   }
+   ```
+
+3. **Validaciones Críticas**
+   ```java
+   // NO ❌
+   @CircuitBreaker(name = "auth")
+   public boolean authenticate(String username, String password) {
+       // Autenticación no puede tener fallback (riesgo de seguridad)
+   }
+   ```
+
+4. **Operaciones Síncronas que Requieren Resultado Inmediato**
+   ```java
+   // NO ❌
+   @CircuitBreaker(name = "payment", fallbackMethod = "paymentFallback")
+   public PaymentResult processPayment(PaymentRequest request) {
+       return stripeClient.charge(request);
+   }
+
+   private PaymentResult paymentFallback(PaymentRequest request, Exception ex) {
+       // ¿Qué retornar? ¿Éxito falso? ¿Fallo? ❌
+       // Mejor: reintentar o encolar, NO usar Circuit Breaker
+   }
+   ```
+
+---
+
+#### Mejores Prácticas
+
+**1. Ajustar Thresholds según el Servicio**
+
+```yaml
+# Servicio crítico (email): tolerante a fallos
+emailService:
+  failure-rate-threshold: 50          # Permite 50% de fallos
+  wait-duration-in-open-state: 10s    # Recuperación rápida
+
+# Servicio no crítico (analytics): estricto
+analyticsService:
+  failure-rate-threshold: 20          # Solo 20% de fallos
+  wait-duration-in-open-state: 60s    # Recuperación lenta
+```
+
+**2. Implementar Fallbacks Inteligentes**
+
+```java
+// Fallback 1: Guardar para reintentar (recomendado)
+private void sendEmailFallback(String email, String username, Exception ex) {
+    emailQueueRepository.save(new PendingEmail(email, username));
+}
+
+// Fallback 2: Usar servicio alternativo
+private void sendEmailFallback(String email, String username, Exception ex) {
+    backupEmailService.send(email, username);
+}
+
+// Fallback 3: Retornar valor por defecto
+private UserProfile getUserProfileFallback(Long userId, Exception ex) {
+    return UserProfile.defaultProfile(userId);
+}
+
+// Fallback 4: Retornar caché
+private Product getProductFallback(Long productId, Exception ex) {
+    return productCache.get(productId)
+        .orElse(Product.unavailable(productId));
+}
+```
+
+**3. Monitorear Estado del Circuit**
+
+```java
+@RestController
+@RequestMapping("/admin/circuit-breaker")
+public class CircuitBreakerController {
+
+    @Autowired
+    private CircuitBreakerRegistry circuitBreakerRegistry;
+
+    @GetMapping("/status")
+    public Map<String, String> getStatus() {
+        return circuitBreakerRegistry.getAllCircuitBreakers()
+            .stream()
+            .collect(Collectors.toMap(
+                CircuitBreaker::getName,
+                cb -> cb.getState().toString()
+            ));
+    }
+
+    @GetMapping("/metrics/{name}")
+    public CircuitBreakerMetrics getMetrics(@PathVariable String name) {
+        CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker(name);
+        CircuitBreaker.Metrics metrics = cb.getMetrics();
+
+        return new CircuitBreakerMetrics(
+            cb.getState().toString(),
+            metrics.getNumberOfSuccessfulCalls(),
+            metrics.getNumberOfFailedCalls(),
+            metrics.getFailureRate()
+        );
+    }
+}
+```
+
+**4. Exponer en Health Endpoint**
+
+```yaml
+# application.yaml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+  endpoint:
+    health:
+      show-details: always
+  health:
+    circuitbreakers:
+      enabled: true
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      emailService:
+        register-health-indicator: true  # ← Importante
+```
+
+**Resultado en `/actuator/health`:**
+```json
+{
+  "status": "UP",
+  "components": {
+    "circuitBreakers": {
+      "status": "UP",
+      "details": {
+        "emailService": {
+          "status": "UP",
+          "state": "CLOSED",
+          "failureRate": "0.0%",
+          "slowCallRate": "0.0%"
+        }
+      }
+    }
+  }
+}
+```
+
+**5. Logs Estructurados**
+
+```java
+@CircuitBreaker(name = "emailService", fallbackMethod = "sendEmailFallback")
+public void sendWelcomeEmail(String email, String username) {
+    logger.info("Attempting to send email",
+        Map.of(
+            "email", email,
+            "username", username,
+            "circuit", "emailService",
+            "state", circuitBreakerRegistry.circuitBreaker("emailService").getState()
+        )
+    );
+
+    externalEmailService.send(email, username);
+}
+
+private void sendEmailFallback(String email, String username, Exception ex) {
+    logger.warn("Circuit breaker fallback executed",
+        Map.of(
+            "email", email,
+            "circuit", "emailService",
+            "state", "OPEN",
+            "reason", ex.getMessage()
+        )
+    );
+}
+```
+
+**6. Testing Circuit Breaker**
+
+```java
+@SpringBootTest
+class EmailServiceCircuitBreakerTest {
+
+    @Autowired
+    private EmailService emailService;
+
+    @Autowired
+    private CircuitBreakerRegistry circuitBreakerRegistry;
+
+    @Test
+    void shouldOpenCircuitAfterFailures() {
+        CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("emailService");
+
+        // Estado inicial: CLOSED
+        assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
+
+        // Provocar 10 fallos (threshold: 50% = 5 fallos de 10)
+        for (int i = 0; i < 10; i++) {
+            try {
+                emailService.sendWelcomeEmail("test@test.com", "test");
+            } catch (Exception e) {
+                // Ignorar
+            }
+        }
+
+        // Circuit debe estar OPEN después de 6 fallos
+        assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.OPEN);
+    }
+
+    @Test
+    void shouldCallFallbackWhenCircuitIsOpen() {
+        CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("emailService");
+
+        // Forzar circuit a OPEN
+        cb.transitionToOpenState();
+
+        // Llamar servicio → debe ejecutar fallback sin lanzar excepción
+        emailService.sendWelcomeEmail("test@test.com", "test");
+
+        // Verificar que se guardó en cola (fallback)
+        verify(emailQueueRepository).save(any(PendingEmail.class));
+    }
+
+    @Test
+    void shouldTransitionToHalfOpenAfterWaitDuration() throws InterruptedException {
+        CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("emailService");
+
+        // Forzar a OPEN
+        cb.transitionToOpenState();
+        assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.OPEN);
+
+        // Esperar wait-duration-in-open-state (10s en config)
+        Thread.sleep(11000);
+
+        // Siguiente llamada → Circuit debe estar HALF_OPEN
+        try {
+            emailService.sendWelcomeEmail("test@test.com", "test");
+        } catch (Exception e) {
+            // Ignorar
+        }
+
+        assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.HALF_OPEN);
+    }
+}
+```
+
+---
+
+#### Combinación: Circuit Breaker + DLT
+
+Circuit Breaker y DLT son **complementarios** y se usan juntos:
+
+```java
+@Component
+public class UserEventsKafkaConsumer {
+
+    private final EmailService emailService;  // ← Con Circuit Breaker
+
+    @KafkaListener(topics = "user.created")
+    public void consume(UserCreatedEvent event) {
+        // Circuit Breaker protege la llamada
+        emailService.sendWelcomeEmail(event.email(), event.username());
+
+        // Si Circuit está OPEN:
+        // 1. Ejecuta fallback (guarda en cola)
+        // 2. NO lanza excepción
+        // 3. Consumer continúa → Kafka avanza offset ✅
+
+        // Si Circuit está CLOSED y falla:
+        // 1. Lanza excepción
+        // 2. DefaultErrorHandler reintenta 3 veces
+        // 3. Después de 3 fallos → mensaje va a DLT
+    }
+}
+```
+
+**Flujo Combinado:**
+
+```
+Evento 1: EmailService falla
+         ↓
+         Circuit CLOSED → Lanza excepción
+         ↓
+         DefaultErrorHandler reintenta 3 veces
+         ↓
+         Sigue fallando → Mensaje va a DLT ✅
+
+Eventos 2-6: EmailService sigue fallando
+         ↓
+         Circuit detecta 60% de fallos
+         ↓
+         Circuit cambia a OPEN ❌
+
+Eventos 7-10: Llegan mientras Circuit está OPEN
+         ↓
+         Circuit ejecuta fallback (guarda en cola)
+         ↓
+         NO lanza excepción
+         ↓
+         Consumer NO se bloquea ✅
+         ↓
+         Kafka avanza offset (no van a DLT) ✅
+
+Después de 10s: Circuit cambia a HALF_OPEN
+Eventos 11-13: Pruebas de recuperación
+         ↓
+         Si EmailService se recuperó → Circuit → CLOSED ✅
+         ↓
+         Todo vuelve a la normalidad
+```
+
+**Resumen de Protecciones:**
+
+| Escenario | Circuit Breaker | DLT |
+|-----------|----------------|-----|
+| Email service caído | Fail-fast con fallback ⚡ | - |
+| Email service intermitente | Abre circuit si >50% fallan | Mensajes fallidos → DLT |
+| Bug en consumer | - | Después de 3 reintentos → DLT |
+| Datos inválidos | - | No puede procesar → DLT |
+| Alta latencia (>5s) | Slow calls → Abre circuit | - |
+
+---
+
 ## Cuándo Usar Cada Concepto
 
 ### ¿Entity o Value Object?

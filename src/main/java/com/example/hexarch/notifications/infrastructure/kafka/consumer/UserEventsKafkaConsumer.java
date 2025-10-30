@@ -1,5 +1,6 @@
 package com.example.hexarch.notifications.infrastructure.kafka.consumer;
 
+import com.example.hexarch.notifications.application.service.EmailService;
 import com.example.hexarch.user.domain.event.UserCreatedEvent;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
@@ -102,6 +103,18 @@ public class UserEventsKafkaConsumer {
 
     private static final Logger logger = LoggerFactory.getLogger(UserEventsKafkaConsumer.class);
 
+    // EmailService con Circuit Breaker protection
+    private final EmailService emailService;
+
+    /**
+     * Constructor con inyección de EmailService
+     *
+     * @param emailService servicio de email con Circuit Breaker
+     */
+    public UserEventsKafkaConsumer(EmailService emailService) {
+        this.emailService = emailService;
+    }
+
     /**
      * Consume eventos de creación de usuario del topic "user.created"
      *
@@ -161,7 +174,15 @@ public class UserEventsKafkaConsumer {
 
             // 1. Enviar email de bienvenida
             logger.info("   ✉️  Sending welcome email to: {}", event.email());
-            // emailService.sendWelcomeEmail(event.email(), event.username());
+
+            // ⚡ CIRCUIT BREAKER PROTECTION
+            // Esta llamada está protegida por Circuit Breaker (@CircuitBreaker en EmailService)
+            // Si EmailService falla repetidamente:
+            // 1. Circuit Breaker detecta tasa de fallos alta
+            // 2. Cambia a estado OPEN
+            // 3. Llama a sendEmailFallback() en lugar de sendWelcomeEmail()
+            // 4. Previene cascading failures
+            emailService.sendWelcomeEmail(event.email(), event.username());
 
             // 2. Enviar SMS de confirmación (opcional)
             // if (event.phoneNumber() != null) {

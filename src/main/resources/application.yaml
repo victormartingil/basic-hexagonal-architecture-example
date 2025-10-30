@@ -143,6 +143,55 @@ spring:
       # batch = confirmar lote completo (más performante)
       ack-mode: record
 
+  # ===================================================================
+  # CONFIGURACIÓN DE RESILIENCE4J (Circuit Breaker, Retry, etc.)
+  # ===================================================================
+resilience4j:
+  circuitbreaker:
+    instances:
+      # Circuit Breaker para EmailService
+      emailService:
+        # Tamaño de la ventana deslizante para calcular tasa de fallos
+        # COUNT_BASED = cuenta número de llamadas
+        # TIME_BASED = cuenta en ventana de tiempo
+        sliding-window-type: COUNT_BASED
+
+        # Número de llamadas en la ventana deslizante
+        # Circuit Breaker evalúa fallos sobre las últimas 10 llamadas
+        sliding-window-size: 10
+
+        # Número mínimo de llamadas antes de evaluar tasa de fallos
+        # Si hay menos de 5 llamadas, el circuit NO se abre (aunque todas fallen)
+        minimum-number-of-calls: 5
+
+        # Porcentaje de fallos para abrir el circuit
+        # Si >= 50% de las últimas 10 llamadas fallan → Circuit pasa a OPEN
+        failure-rate-threshold: 50
+
+        # Cuánto tiempo permanece OPEN antes de cambiar a HALF_OPEN
+        # Después de 10 segundos, permite llamadas de prueba
+        wait-duration-in-open-state: 10s
+
+        # Número de llamadas permitidas en estado HALF_OPEN (prueba)
+        # Permite 3 llamadas de prueba para ver si el servicio se recuperó
+        permitted-number-of-calls-in-half-open-state: 3
+
+        # Si en HALF_OPEN, cuántas llamadas deben fallar para volver a OPEN
+        # Si >= 50% de las 3 llamadas de prueba fallan → Vuelve a OPEN
+        # Si < 50% fallan → Cambia a CLOSED ✅
+        slow-call-rate-threshold: 50
+
+        # Llamada se considera "lenta" si tarda más de esto
+        # Llamadas lentas también cuentan como fallos
+        slow-call-duration-threshold: 5s
+
+        # Registrar eventos para debugging/monitoring
+        register-health-indicator: true
+        record-exceptions:
+          - java.lang.RuntimeException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+
 # ===================================================================
 # CONFIGURACIÓN DEL SERVIDOR
 # ===================================================================
