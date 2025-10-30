@@ -234,3 +234,33 @@ management:
     health:
       # Mostrar detalles del health endpoint
       show-details: always
+
+# ===================================================================
+# CONFIGURACIÓN DE JWT (JSON Web Token)
+# ===================================================================
+jwt:
+  # Clave secreta para firmar tokens JWT
+  # ⚠️ IMPORTANTE: En producción REAL, usar variables de entorno o secrets manager
+  # ⚠️ NO commitear secretos reales a Git
+  #
+  # Esta clave es para desarrollo/educación.
+  # Generada con: openssl rand -base64 32
+  #
+  # REQUISITOS:
+  # - Mínimo 256 bits (32 caracteres) para HMAC-SHA256
+  # - Debe ser aleatoria y compleja
+  #
+  # PRODUCCIÓN:
+  # - Usar: ${JWT_SECRET} (variable de entorno)
+  # - O AWS Secrets Manager / Azure Key Vault / HashiCorp Vault
+  secret: 5JYzCkNP8xQ2mVnRwTaFbGdKeShXrUvYy3t6v9yBxE4=
+
+  # Tiempo de expiración del token en milisegundos
+  # 86400000 ms = 24 horas
+  #
+  # BEST PRACTICES:
+  # - Access tokens: 15 min - 1 hora (short-lived)
+  # - Refresh tokens: 7-30 días (long-lived)
+  #
+  # Para este proyecto educativo: 24 horas
+  expiration: 86400000  # 24 horas

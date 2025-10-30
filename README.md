@@ -27,9 +27,11 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
 - **📡 Domain Events**: Spring Events (in-memory) + Kafka (async integration events)
 - **🔄 Apache Kafka**: Producer/Consumer con reintentos y Dead Letter Topic (DLT)
 - **🛡️ Circuit Breaker**: Resilience4j para prevenir fallos en cascada (fallback automático)
-- **📚 6000+ líneas de documentación**: Guías detalladas con ejemplos prácticos
-- **✅ 73 Tests**: Unit (37), Integration (15) y Architecture (21)
+- **🔐 Spring Security + JWT**: Autenticación stateless con roles (ADMIN, MANAGER, VIEWER, SUPPLIER)
+- **📚 7000+ líneas de documentación**: Guías detalladas con ejemplos prácticos
+- **✅ 116 Tests**: Unit (79), Integration (16) y Architecture (21)
   - Kafka tests separados por Publisher/Consumer siguiendo best practices de microservicios
+  - Security tests completos (JWT + autorización por roles)
 - **🚀 CI/CD con GitHub Actions**: 5 workflows automatizados para validación continua
 - **📊 Code Quality**: JaCoCo (cobertura 80%+) + SonarCloud (análisis continuo)
 - **🔧 Spring Boot 3.5**: Java 21, Records, Lombok, MapStruct
@@ -94,9 +96,22 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
    - ✅ Interpretación de métricas y reportes
    - ✅ Troubleshooting y mejores prácticas
 
+### Guías de Seguridad
+
+7. **[08-Spring-Security-JWT.md](docs/08-Spring-Security-JWT.md)** - 🔐 Spring Security + JWT
+   - ✅ Conceptos: Autenticación vs Autorización, Stateless vs Stateful
+   - ✅ ¿Qué es JWT?: Estructura, firma, funcionamiento con diagramas
+   - ✅ Spring Security: Arquitectura de filtros, SecurityContext
+   - ✅ Implementación completa: Roles (ADMIN, MANAGER, VIEWER, SUPPLIER)
+   - ✅ Autorización por endpoint: Matriz de permisos
+   - ✅ Flujos completos con diagramas Mermaid
+   - ✅ Ejemplos prácticos: curl, Postman, testing
+   - ✅ Best Practices: Secret key, HTTPS, refresh tokens
+   - ✅ Troubleshooting: Solución a errores comunes
+
 ### Para Desarrolladores con IA
 
-7. **[.ai-guidelines.md](.ai-guidelines.md)** - Guidelines para GitHub Copilot, Cursor, Claude
+8. **[.ai-guidelines.md](.ai-guidelines.md)** - Guidelines para GitHub Copilot, Cursor, Claude
    - Reglas arquitecturales obligatorias
    - Nomenclatura exacta a seguir
    - Patrones de implementación
@@ -588,25 +603,27 @@ docker pull postgres:16-alpine
 
 | Comando | Tests Ejecutados | Requiere Docker | Uso |
 |---------|------------------|-----------------|-----|
-| `./mvnw test` | Unit + Architecture (58 tests) | ❌ No | Build rápido, CI/CD |
+| `./mvnw test` | Unit + Architecture (100 tests) | ❌ No | Build rápido, CI/CD |
 | `./mvnw test -Dtest=HexagonalArchitectureTest` | Solo Architecture (21 tests) | ❌ No | Validar arquitectura |
 | `./mvnw test -Dtest=CreateUserServiceTest` | Solo CreateUser unit (6 tests) | ❌ No | Test específico |
-| `./mvnw test -Dtest=EmailServiceTest` | Solo Circuit Breaker (7 tests) | ❌ No | Test específico |
-| `./mvnw test -Pintegration-tests` | **Todos** (Unit + Integration + Architecture, 73 tests) | ✅ Sí | Validación completa |
-| `./mvnw test -Pintegration-tests -Dtest=*IntegrationTest` | Solo Integration (15 tests) | ✅ Sí | Tests de integración |
-| `./mvnw clean install` | Unit + Architecture (58 tests) | ❌ No | Build sin Docker |
-| `./mvnw clean install -Pintegration-tests` | Todos los tests (73 tests) | ✅ Sí | Build completo |
+| `./mvnw test -Dtest=JwtTokenProviderTest` | Solo JWT Provider (10 tests) | ❌ No | Test específico |
+| `./mvnw test -Pintegration-tests` | **Todos** (Unit + Integration + Architecture, 116 tests) | ✅ Sí | Validación completa |
+| `./mvnw test -Pintegration-tests -Dtest=*IntegrationTest` | Solo Integration (16 tests) | ✅ Sí | Tests de integración |
+| `./mvnw clean install` | Unit + Architecture (100 tests) | ❌ No | Build sin Docker |
+| `./mvnw clean install -Pintegration-tests` | Todos los tests (116 tests) | ✅ Sí | Build completo |
 
 **Desglose de tests:**
-- **Unit Tests**: 37 tests
+- **Unit Tests**: 79 tests
   - User Service: 10 tests (CreateUser: 6, GetUser: 4)
   - Kafka: 27 tests (EmailService: 7, Publisher: 6, Consumer: 7, DLT: 7)
+  - Security/JWT: 42 tests (JwtTokenProvider: 10, Role: 32)
 - **Architecture Tests**: 21 tests (ArchUnit - validación de arquitectura hexagonal)
-- **Integration Tests**: 15 tests (requieren Docker funcionando)
-  - User Service: 2 test files (Controller: 10, Repository: 13 = 23 test cases)
-  - Kafka: 3 test files (Publisher: 4, Consumer: 6, DLT: 5 = 15 test cases)
+- **Integration Tests**: 16 test files (requieren Docker funcionando)
+  - User Service: 2 files (Controller: 10, Repository: 13 = 23 test cases)
+  - Kafka: 3 files (Publisher: 4, Consumer: 6, DLT: 5 = 15 test cases)
+  - Security: 1 file (SecurityIntegration: 10 test cases)
 
-**Total: 73 tests (58 sin Docker + 15 con Docker)**
+**Total: 116 tests (100 sin Docker + 16 con Docker)**
 
 ---
 
