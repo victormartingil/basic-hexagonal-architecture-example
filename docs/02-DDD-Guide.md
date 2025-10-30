@@ -985,7 +985,327 @@ public void onUserCreated(UserCreatedEvent event) {
 **Integration Events (Kafka):**
 - `KafkaUserEventPublisherAdapter.java` - Publisher a Kafka
 - `UserEventsKafkaConsumer.java` - Consumer (Notifications Service simulado)
+- `UserCreatedEventDLTConsumer.java` - Consumer para Dead Letter Topic
+- `KafkaConfig.java` - Configuración con DLT automático
 - `docker-compose.yml` - Kafka + Zookeeper
+
+---
+
+### 💀 Dead Letter Topic (DLT) - Manejo de Errores
+
+**¿Qué es un Dead Letter Topic?**
+
+Un DLT es un topic especial donde se envían mensajes que **fallaron al procesarse** después de múltiples reintentos.
+
+**Problema sin DLT:**
+```java
+@KafkaListener(topics = "user.created")
+public void consume(UserCreatedEvent event) {
+    emailService.send(event.email());  // ❌ Falla siempre
+}
+
+// Resultado:
+// 1. Consumer falla
+// 2. Kafka reintenta → Falla
+// 3. Kafka reintenta → Falla
+// 4. Loop infinito 🔄
+// 5. Consumer bloqueado, no procesa mensajes siguientes ❌
+```
+
+**Solución con DLT:**
+```java
+// Configuración en KafkaConfig
+DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
+DefaultErrorHandler errorHandler = new DefaultErrorHandler(
+    recoverer,
+    new FixedBackOff(1000L, 3L)  // 3 reintentos, 1 segundo entre cada uno
+);
+factory.setCommonErrorHandler(errorHandler);
+
+// Resultado:
+// 1. Consumer falla
+// 2. Espera 1s, reintenta (1/3) → Falla
+// 3. Espera 1s, reintenta (2/3) → Falla
+// 4. Espera 1s, reintenta (3/3) → Falla
+// 5. Mensaje va a "user.created.dlt" ✅
+// 6. Consumer continúa con siguiente mensaje ✅
+```
+
+---
+
+#### Flujo Completo con DLT
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. Mensaje en topic "user.created"                              │
+│    UserCreatedEvent publicado                                   │
+└────────┬────────────────────────────────────────────────────────┘
+         ↓
+┌────────┴────────────────────────────────────────────────────────┐
+│ 2. UserEventsKafkaConsumer intenta procesar                     │
+│    ❌ Falla (email service down, bug, datos inválidos...)       │
+└────────┬────────────────────────────────────────────────────────┘
+         ↓
+┌────────┴────────────────────────────────────────────────────────┐
+│ 3. DefaultErrorHandler reintenta automáticamente                │
+│    • Espera 1 segundo → Reintento 1/3 → ❌ Falla               │
+│    • Espera 1 segundo → Reintento 2/3 → ❌ Falla               │
+│    • Espera 1 segundo → Reintento 3/3 → ❌ Falla               │
+└────────┬────────────────────────────────────────────────────────┘
+         ↓
+┌────────┴────────────────────────────────────────────────────────┐
+│ 4. DeadLetterPublishingRecoverer publica a DLT                  │
+│    Topic: "user.created.dlt"                                    │
+│    Headers agregados:                                           │
+│    • kafka_dlt-original-topic: "user.created"                   │
+│    • kafka_dlt-exception-message: "Service unavailable"         │
+│    • kafka_dlt-exception-stacktrace: "..."                      │
+└────────┬────────────────────────────────────────────────────────┘
+         ↓
+┌────────┴────────────────────────────────────────────────────────┐
+│ 5. Consumer original continúa con siguiente mensaje ✅           │
+│    No se bloquea, sigue procesando                              │
+└─────────────────────────────────────────────────────────────────┘
+
+         ↓ (en paralelo)
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 6. UserCreatedEventDLTConsumer recibe mensaje fallido           │
+│    • Loguea el error para investigación                         │
+│    • Opcionalmente: guarda en BD, envía alerta                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### Configuración en este Proyecto
+
+**KafkaConfig.java:**
+```java
+@Bean
+public ConcurrentKafkaListenerContainerFactory<String, UserCreatedEvent>
+    kafkaListenerContainerFactory(
+        ConsumerFactory<String, UserCreatedEvent> consumerFactory,
+        KafkaTemplate<String, UserCreatedEvent> kafkaTemplate) {
+
+    ConcurrentKafkaListenerContainerFactory<String, UserCreatedEvent> factory =
+            new ConcurrentKafkaListenerContainerFactory<>();
+    factory.setConsumerFactory(consumerFactory);
+
+    // ✨ DLT AUTOMÁTICO
+    DeadLetterPublishingRecoverer recoverer =
+        new DeadLetterPublishingRecoverer(kafkaTemplate);
+
+    DefaultErrorHandler errorHandler = new DefaultErrorHandler(
+        recoverer,
+        new FixedBackOff(1000L, 3L)  // 3 reintentos, 1s entre cada uno
+    );
+
+    factory.setCommonErrorHandler(errorHandler);
+
+    return factory;
+}
+```
+
+**Consumer para DLT:**
+```java
+@Component
+public class UserCreatedEventDLTConsumer {
+
+    @KafkaListener(
+        topics = "user.created.dlt",
+        groupId = "notifications-service-dlt"
+    )
+    public void consumeFailedMessage(
+            @Payload UserCreatedEvent event,
+            ConsumerRecord<String, UserCreatedEvent> record) {
+
+        // Loguear mensaje fallido
+        logger.error("Failed message: {}", event);
+
+        // Extraer información del error
+        String error = getHeader(record, "kafka_dlt-exception-message");
+        logger.error("Error: {}", error);
+
+        // Guardar en BD para análisis posterior (recomendado)
+        // failedMessageRepository.save(event, error);
+    }
+}
+```
+
+---
+
+#### Casos de Uso Reales
+
+**1. Error Transitorio (Service Down)**
+```java
+// Email service está caído temporalmente
+@KafkaListener(topics = "user.created")
+public void consume(UserCreatedEvent event) {
+    emailService.send(event.email());  // ❌ Timeout
+}
+
+// Resultado:
+// 1. Falla 3 veces → mensaje va a DLT
+// 2. Email service se recupera
+// 3. Reprocesas mensajes del DLT manualmente
+// 4. ✅ Emails enviados exitosamente
+```
+
+**2. Error Permanente (Datos Inválidos)**
+```java
+@KafkaListener(topics = "user.created")
+public void consume(UserCreatedEvent event) {
+    emailService.send(event.email());  // ❌ Email inválido
+}
+
+// Resultado:
+// 1. Falla 3 veces → mensaje va a DLT
+// 2. Investigas: email es "invalid@"
+// 3. Corriges datos en BD
+// 4. Reprocesas mensaje con datos corregidos
+```
+
+**3. Bug en Código**
+```java
+@KafkaListener(topics = "user.created")
+public void consume(UserCreatedEvent event) {
+    String name = event.username().toUpperCase();  // ❌ NullPointerException
+}
+
+// Resultado:
+// 1. Falla 3 veces → mensaje va a DLT
+// 2. Identificas el bug
+// 3. Despliegas fix
+// 4. Reprocesas mensajes del DLT
+// 5. ✅ Todos procesados correctamente
+```
+
+---
+
+#### Qué Hacer con Mensajes en DLT
+
+**Opción 1: Loguear (básico)**
+```java
+@KafkaListener(topics = "user.created.dlt")
+public void consumeDLT(UserCreatedEvent event) {
+    logger.error("Failed event: {}", event);
+    // Ver logs y debuguear manualmente
+}
+```
+
+**Opción 2: Guardar en BD (recomendado)**
+```java
+@KafkaListener(topics = "user.created.dlt")
+public void consumeDLT(UserCreatedEvent event, ConsumerRecord record) {
+    String error = getHeader(record, "kafka_dlt-exception-message");
+
+    failedMessageRepository.save(new FailedMessage(
+        "user.created",
+        event.userId().toString(),
+        objectMapper.writeValueAsString(event),
+        error,
+        Instant.now()
+    ));
+
+    // Dashboard para ver mensajes fallidos
+}
+```
+
+**Opción 3: Enviar Alertas**
+```java
+@KafkaListener(topics = "user.created.dlt")
+public void consumeDLT(UserCreatedEvent event) {
+    // Alerta a Slack/PagerDuty
+    alertService.sendAlert(
+        "DLT Alert: Failed to process user " + event.username(),
+        AlertSeverity.HIGH
+    );
+}
+```
+
+**Opción 4: Reprocesar Automáticamente**
+```java
+@RestController
+@RequestMapping("/admin/dlt")
+public class DLTController {
+
+    @PostMapping("/retry")
+    public String retryDLT() {
+        // Lee mensajes del DLT
+        List<UserCreatedEvent> events = dltService.getFailedMessages();
+
+        // Republica al topic original
+        events.forEach(event -> {
+            kafkaTemplate.send("user.created", event.userId(), event);
+        });
+
+        return "Retried " + events.size() + " messages";
+    }
+}
+```
+
+---
+
+#### Mejores Prácticas para DLT
+
+1. **Monitorear el tamaño del DLT**
+   - Si crece mucho → algo está mal
+   - Configurar alertas (ej: si DLT > 100 mensajes)
+
+2. **Guardar mensajes en BD**
+   - No solo loguear
+   - Permite análisis posterior y dashboard
+
+3. **Diferentes reintentos según error**
+   - Errors transitorios: más reintentos (5-10)
+   - Errors permanentes: menos reintentos (2-3)
+
+4. **Backoff exponencial para errors transitorios**
+   ```java
+   // En lugar de FixedBackOff(1000L, 3L)
+   new ExponentialBackOff(1000L, 2.0)  // 1s, 2s, 4s, 8s...
+   ```
+
+5. **Separar DLTs por tipo de error**
+   ```java
+   // DLT para errores transitorios (reintentables)
+   "user.created.dlt.retry"
+
+   // DLT para errores permanentes (no reintentables)
+   "user.created.dlt.permanent"
+   ```
+
+---
+
+#### Comandos Útiles
+
+**Ver mensajes en DLT:**
+```bash
+kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic user.created.dlt \
+  --from-beginning \
+  --property print.headers=true
+```
+
+**Contar mensajes en DLT:**
+```bash
+kafka-run-class.sh kafka.tools.GetOffsetShell \
+  --broker-list localhost:9092 \
+  --topic user.created.dlt
+```
+
+**Consumir con headers (ver información del error):**
+```bash
+kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic user.created.dlt \
+  --from-beginning \
+  --property print.key=true \
+  --property print.headers=true \
+  --property print.timestamp=true
+```
 
 ---
 

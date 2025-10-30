@@ -10,8 +10,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
+import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -182,12 +185,20 @@ public class KafkaConfig {
      * - Máximo: número de particiones del topic (en nuestro caso, 3)
      * - Si tienes 1 partición, solo 1 thread consumirá (los demás estarán idle)
      *
+     * DEAD LETTER TOPIC (DLT):
+     * - Configurado con DefaultErrorHandler
+     * - Mensajes que fallan después de 3 reintentos → van a topic DLT
+     * - Topic DLT = topic original + ".dlt" (ej: "user.created.dlt")
+     * - Evita loops infinitos con mensajes problemáticos
+     *
      * @param consumerFactory factory configurado arriba
+     * @param kafkaTemplate template para publicar a DLT
      * @return ConcurrentKafkaListenerContainerFactory para @KafkaListener
      */
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, UserCreatedEvent> kafkaListenerContainerFactory(
-            ConsumerFactory<String, UserCreatedEvent> consumerFactory) {
+            ConsumerFactory<String, UserCreatedEvent> consumerFactory,
+            KafkaTemplate<String, UserCreatedEvent> kafkaTemplate) {
 
         ConcurrentKafkaListenerContainerFactory<String, UserCreatedEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
@@ -196,6 +207,34 @@ public class KafkaConfig {
         // Concurrency = Número de threads consumiendo en paralelo
         // Debe ser <= número de particiones del topic
         factory.setConcurrency(3);
+
+        // ═══════════════════════════════════════════════════════════════
+        // DEAD LETTER TOPIC (DLT) - Manejo automático de errores
+        // ═══════════════════════════════════════════════════════════════
+
+        // DeadLetterPublishingRecoverer: Publica mensajes fallidos a topic DLT
+        // - Topic DLT = topic original + ".dlt"
+        // - Ejemplo: "user.created" → "user.created.dlt"
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
+
+        // DefaultErrorHandler: Maneja errores con reintentos automáticos
+        // - FixedBackOff(1000L, 3L): 3 reintentos con 1 segundo entre cada uno
+        // - Después de 3 fallos → envía a DLT usando recoverer
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(
+                recoverer,
+                new FixedBackOff(1000L, 3L)  // 3 reintentos, 1 segundo entre cada uno
+        );
+
+        // Configurar error handler en la factory
+        factory.setCommonErrorHandler(errorHandler);
+
+        // FLUJO CON ERRORES:
+        // 1. Consumer falla al procesar mensaje
+        // 2. Espera 1 segundo, reintenta (intento 1/3)
+        // 3. Falla nuevamente, espera 1 segundo, reintenta (intento 2/3)
+        // 4. Falla nuevamente, espera 1 segundo, reintenta (intento 3/3)
+        // 5. Después de 3 fallos → publica a "user.created.dlt"
+        // 6. Consumer continúa con el siguiente mensaje ✅
 
         return factory;
     }
