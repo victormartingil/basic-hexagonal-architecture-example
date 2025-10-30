@@ -657,6 +657,21 @@ El proyecto incluye **AsyncAPI specification** para documentar todos los eventos
 - `UserCreatedEvent`: Se publica cuando se crea un usuario
 - Topics: `user.events` (principal), `user.events.dlt` (fallidos)
 
+**¿Por qué AsyncAPI no genera código (como OpenAPI)?**
+
+**Decisión consciente**: AsyncAPI se usa como **documentación formal** del contrato, pero NO genera código.
+
+**Razones**:
+1. **Código educativo**: Los eventos son POJOs simples que juniors pueden leer y modificar fácilmente
+2. **AsyncAPI generators menos maduros**: Comparado con OpenAPI, las herramientas de generación para eventos Kafka en Java son menos maduras
+3. **Simplicidad**: Los eventos (`UserCreatedEvent`) son más simples que endpoints REST - no justifica generación
+4. **Flexibilidad**: Código explícito permite explicar cada decisión de diseño
+
+**En producción enterprise**: Podrías considerar generación desde AsyncAPI si tienes:
+- Múltiples servicios con decenas de eventos
+- Necesidad de strict contract enforcement
+- Equipo senior familiarizado con code generation tools
+
 #### Opción D: Bruno / Postman Collections
 
 Para una experiencia profesional de testing, importa las colecciones preconfigurables:
@@ -1169,6 +1184,259 @@ Infrastructure → Application → Domain
 El flujo de datos va: Infrastructure → Application → Domain → Application → Infrastructure
 
 Pero las **dependencias** apuntan hacia adentro.
+
+---
+
+## 🚀 Deployment a Producción
+
+### Docker
+
+El proyecto incluye un **Dockerfile multi-stage** optimizado para producción:
+
+```bash
+# Build imagen
+docker build -t hexarch:1.0.0 .
+
+# Run localmente
+docker run -p 8080:8080 \
+  -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/hexarch_db \
+  -e JWT_SECRET=your-production-secret-256-bits \
+  -e SPRING_PROFILES_ACTIVE=prod \
+  hexarch:1.0.0
+```
+
+**Características**:
+- ✅ **Multi-stage build**: Imagen final ~200MB (vs ~800MB single-stage)
+- ✅ **Non-root user**: Seguridad mejorada (usuario `spring`)
+- ✅ **JVM tuning**: Configurado para contenedores (`UseContainerSupport`, `MaxRAMPercentage`)
+- ✅ **Health check integrado**: Kubernetes-compatible
+- ✅ **Optimizado para cache**: Layers separados para dependencies y código
+
+### Kubernetes
+
+#### Health Probes
+
+El servicio expone endpoints estándar de Kubernetes:
+
+```yaml
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hexarch-user-service
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: hexarch
+        image: hexarch:1.0.0
+        ports:
+        - containerPort: 8080
+
+        # Liveness Probe: ¿La app está viva?
+        # Si falla, Kubernetes REINICIA el pod
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 40
+          periodSeconds: 10
+          failureThreshold: 3
+
+        # Readiness Probe: ¿La app está lista para tráfico?
+        # Si falla, Kubernetes DEJA de enviar requests al pod
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          failureThreshold: 3
+
+        env:
+        - name: SPRING_DATASOURCE_URL
+          value: jdbc:postgresql://postgres-service:5432/hexarch_db
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: hexarch-secrets
+              key: jwt-secret
+
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+```
+
+#### Graceful Shutdown
+
+La aplicación está configurada para **graceful shutdown**:
+
+```yaml
+# application.yaml (ya configurado)
+server:
+  shutdown: graceful
+
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+```
+
+**Qué significa**:
+1. Kubernetes envía `SIGTERM` al pod
+2. Spring Boot deja de aceptar nuevos requests
+3. Espera hasta 30s a que requests en curso terminen
+4. Si después de 30s aún hay requests, las fuerza a terminar
+5. Shutdown completo
+
+**Beneficio**: Zero downtime en rolling updates
+
+#### ConfigMap y Secrets
+
+```yaml
+# secrets.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hexarch-secrets
+type: Opaque
+stringData:
+  jwt-secret: "your-base64-encoded-256-bit-secret"
+  db-password: "your-db-password"
+
+---
+# configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hexarch-config
+data:
+  application.yaml: |
+    spring:
+      application:
+        name: hexarch
+      kafka:
+        bootstrap-servers: kafka-cluster:9092
+    management:
+      tracing:
+        sampling:
+          probability: 0.1  # 10% sampling en producción
+```
+
+#### Service
+
+```yaml
+# service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: hexarch-user-service
+spec:
+  type: ClusterIP
+  selector:
+    app: hexarch
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+  - name: actuator
+    port: 8081
+    targetPort: 8080
+```
+
+#### Horizontal Pod Autoscaler (HPA)
+
+```yaml
+# hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hexarch-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hexarch-user-service
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+```
+
+**Comportamiento**:
+- Mínimo 2 pods (alta disponibilidad)
+- Máximo 10 pods (control de costos)
+- Escala cuando CPU > 70% o Memory > 80%
+
+### Observability en Producción
+
+#### Distributed Tracing con Zipkin
+
+```yaml
+# deployment.yaml (agregar)
+env:
+- name: MANAGEMENT_ZIPKIN_TRACING_ENDPOINT
+  value: "http://zipkin-service:9411/api/v2/spans"
+- name: MANAGEMENT_TRACING_SAMPLING_PROBABILITY
+  value: "0.1"  # 10% en producción (reduce overhead)
+```
+
+**Acceder a Zipkin UI**:
+```bash
+kubectl port-forward svc/zipkin 9411:9411
+# Abrir http://localhost:9411
+```
+
+#### Prometheus + Grafana
+
+```yaml
+# servicemonitor.yaml (Prometheus Operator)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: hexarch-metrics
+spec:
+  selector:
+    matchLabels:
+      app: hexarch
+  endpoints:
+  - port: actuator
+    path: /actuator/prometheus
+    interval: 30s
+```
+
+**Dashboards Grafana** (ya incluidos en `monitoring/grafana/dashboards/`):
+- HTTP request rate y latencias
+- JVM memory y GC
+- Database connection pool
+- Kafka producer/consumer metrics
+
+### CI/CD con GitHub Actions
+
+El proyecto incluye **5 workflows automatizados**:
+
+1. **Build** → Verifica compilación
+2. **CI Tests** → Unit tests + cobertura 85%+
+3. **Architecture Tests** → Valida 21 reglas de Hexagonal Architecture
+4. **Integration Tests** → Testcontainers (PostgreSQL + Kafka)
+5. **Security Scan** (opcional) → OWASP dependency check
+
+**Ver documentación completa**: [docs/10-CI-CD-Pipeline.md](docs/10-CI-CD-Pipeline.md)
 
 ---
 

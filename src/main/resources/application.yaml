@@ -11,6 +11,15 @@ spring:
     name: hexarch
 
   # ===================================================================
+  # LIFECYCLE - Graceful Shutdown
+  # ===================================================================
+  lifecycle:
+    # Tiempo máximo para completar requests en curso durante shutdown
+    # Después de este tiempo, se fuerza el shutdown
+    # PRODUCTION: 30-60 segundos (depende de la duración de tus requests más largos)
+    timeout-per-shutdown-phase: 30s
+
+  # ===================================================================
   # CONFIGURACIÓN DE BASE DE DATOS - POSTGRESQL
   # ===================================================================
   datasource:
@@ -198,6 +207,10 @@ resilience4j:
 server:
   port: 8080
 
+  # Graceful shutdown para evitar pérdida de requests en rolling updates
+  # Espera a que las requests en curso terminen antes de apagar el servidor
+  shutdown: graceful
+
 # ===================================================================
 # CONFIGURACIÓN DE LOGGING
 # ===================================================================
@@ -216,12 +229,13 @@ logging:
     # Nivel de log para Spring
     org.springframework.web: DEBUG
 
-  # Patrón de log con Trace ID y Span ID para distributed tracing
+  # Patrón de log con Trace ID, Span ID y Correlation ID para distributed tracing
   pattern:
-    # Formato: timestamp [traceId,spanId] level - message
-    # traceId: identifica la transacción completa entre servicios
+    # Formato: timestamp [traceId,spanId] correlationId level - message
+    # traceId: identifica la transacción completa (Micrometer Tracing)
     # spanId: identifica una operación específica dentro del trace
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%X{traceId},%X{spanId}] %5p - %msg%n"
+    # correlationId: identifica el flujo de negocio completo entre servicios
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%X{traceId},%X{spanId}] %X{correlationId} %5p - %msg%n"
 
 # ===================================================================
 # CONFIGURACIÓN DE ACTUATOR (Monitoreo)
@@ -238,6 +252,25 @@ management:
     health:
       # Mostrar detalles del health endpoint
       show-details: always
+
+      # Habilitar Kubernetes-style health probes
+      # Endpoints: /actuator/health/liveness y /actuator/health/readiness
+      probes:
+        enabled: true
+
+  # ===================================================================
+  # HEALTH INDICATORS - Kubernetes Probes
+  # ===================================================================
+  health:
+    # Liveness Probe: ¿La aplicación está viva?
+    # Si falla, Kubernetes reinicia el pod
+    livenessState:
+      enabled: true
+
+    # Readiness Probe: ¿La aplicación está lista para recibir tráfico?
+    # Si falla, Kubernetes deja de enviar requests al pod
+    readinessState:
+      enabled: true
 
   # ===================================================================
   # DISTRIBUTED TRACING - Micrometer Tracing

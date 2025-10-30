@@ -1,0 +1,59 @@
+# ============================================================================
+# .dockerignore - Excluir archivos innecesarios del Docker build context
+# ============================================================================
+#
+# BENEFITS:
+# - Build más rápido (menos archivos a copiar)
+# - Imagen más pequeña
+# - Previene copiar secrets accidentalmente
+#
+# ============================================================================
+
+# Maven build output
+target/
+!target/*.jar
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# GitHub Actions
+.github/
+
+# Documentation (no needed in runtime)
+docs/
+*.md
+!README.md
+
+# Tests
+src/test/
+
+# Local environment files (MAY CONTAIN SECRETS)
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Monitoring (local only)
+monitoring/
+
+# API collections (local testing)
+api-collections/
+
+# AsyncAPI (documentation only)
+asyncapi-docs/
