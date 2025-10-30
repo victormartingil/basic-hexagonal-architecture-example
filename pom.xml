@@ -316,6 +316,12 @@
 						<!-- Excluye integration tests por defecto (requieren Docker) -->
 						<exclude>**/*IntegrationTest.java</exclude>
 					</excludes>
+					<!-- Variables de entorno para Testcontainers -->
+					<environmentVariables>
+						<!-- Desactivar ryuk para compatibilidad con Rancher Desktop -->
+						<!-- Ryuk es un contenedor de limpieza que falla con Rancher Desktop -->
+						<TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+					</environmentVariables>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -421,6 +427,12 @@
 								<include>**/*Test.java</include>
 								<include>**/*IntegrationTest.java</include>
 							</includes>
+							<!-- Variables de entorno para Testcontainers -->
+							<environmentVariables>
+								<!-- Desactivar ryuk para compatibilidad con Rancher Desktop -->
+								<!-- Ryuk es un contenedor de limpieza que falla con Rancher Desktop -->
+								<TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+							</environmentVariables>
 						</configuration>
 					</plugin>
 				</plugins>

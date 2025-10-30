@@ -1,0 +1,97 @@
+meta {
+  name: Login as ADMIN
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/login
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "username": "admin",
+    "role": "ADMIN"
+  }
+}
+
+docs {
+  # Login as ADMIN
+
+  Generates a JWT token with **ADMIN** role for testing purposes.
+
+  ## Authentication Strategy
+  This is a **simplified authentication endpoint** for development and testing.
+
+  - **No password required** (for easy testing)
+  - **Token auto-saved** to `authToken` environment variable
+  - **Valid for 24 hours** (configurable in application.yaml)
+
+  ## Roles Available
+  - `ADMIN`: Full access (can create, read, update, delete users)
+  - `MANAGER`: Can read and update users
+  - `VIEWER`: Read-only access
+  - `SUPPLIER`: Limited access (specific to supplier operations)
+
+  ## Post-Response Behavior
+  The token is automatically saved to the `authToken` environment variable,
+  so subsequent requests can use it without manual copying.
+
+  ## Usage
+  1. Run this request to get a token
+  2. The token is automatically saved to `{{authToken}}`
+  3. Other requests will use it automatically via `auth: bearer`
+
+  ## Expected Response
+  ```json
+  {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "type": "Bearer",
+    "username": "admin",
+    "roles": ["ADMIN"],
+    "expiresIn": 86400000
+  }
+  ```
+}
+
+tests {
+  test("Status code should be 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Response should have token", function() {
+    expect(res.getBody().token).to.be.a('string');
+  });
+
+  test("Token type should be Bearer", function() {
+    expect(res.getBody().type).to.equal('Bearer');
+  });
+
+  test("Role should be ADMIN", function() {
+    expect(res.getBody().roles).to.include('ADMIN');
+  });
+
+  test("Username should match request", function() {
+    expect(res.getBody().username).to.equal('admin');
+  });
+
+  test("Token should be saved to environment", function() {
+    expect(bru.getEnvVar("authToken")).to.be.a('string');
+  });
+}
+
+script:post-response {
+  // Auto-save token to environment variable
+  if (res.getStatus() === 200) {
+    const token = res.getBody().token;
+    bru.setEnvVar("authToken", token);
+    console.log("✅ Token saved to authToken variable");
+    console.log("🔑 Token expires in:", res.getBody().expiresIn / 1000 / 60, "minutes");
+  }
+}

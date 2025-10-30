@@ -12,6 +12,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -156,6 +157,43 @@ public class GlobalExceptionHandler {
             "VALIDATION_001",                     // errorCode
             LocalDateTime.now(),                  // timestamp
             fieldErrors                           // details (mapa de errores por campo)
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(errorResponse);
+    }
+
+    /**
+     * Maneja excepciones de tipo de argumento incorrecto
+     *
+     * Se activa cuando Spring no puede convertir un path variable o query param
+     * al tipo esperado. Ejemplo: pasar "not-a-uuid" cuando se espera UUID.
+     *
+     * @param ex excepción de tipo incorrecto
+     * @return 400 Bad Request con detalles del error
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleMethodArgumentTypeMismatchException(
+            MethodArgumentTypeMismatchException ex) {
+
+        logger.warn("Type mismatch error: parameter '{}' with value '{}' could not be converted to type '{}'",
+                ex.getName(), ex.getValue(), ex.getRequiredType());
+
+        String message = String.format(
+                "El parámetro '%s' tiene un formato inválido. Valor recibido: '%s'. Tipo esperado: %s",
+                ex.getName(),
+                ex.getValue(),
+                ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "desconocido"
+        );
+
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),       // 400
+                "Type Mismatch",                      // error
+                message,                              // message
+                "TYPE_MISMATCH_001",                  // errorCode
+                LocalDateTime.now(),                  // timestamp
+                null                                  // details
         );
 
         return ResponseEntity

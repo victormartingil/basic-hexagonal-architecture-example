@@ -22,6 +22,12 @@
           "value": "550e8400-e29b-41d4-a716-446655440000",
           "type": "default",
           "enabled": true
+        },
+        {
+          "key": "authToken",
+          "value": "",
+          "type": "default",
+          "enabled": true
         }
       ],
       "_postman_variable_scope": "environment"
@@ -46,6 +52,12 @@
           "value": "550e8400-e29b-41d4-a716-446655440000",
           "type": "default",
           "enabled": true
+        },
+        {
+          "key": "authToken",
+          "value": "",
+          "type": "default",
+          "enabled": true
         }
       ],
       "_postman_variable_scope": "environment"
@@ -68,6 +80,12 @@
         {
           "key": "userId",
           "value": "550e8400-e29b-41d4-a716-446655440000",
+          "type": "default",
+          "enabled": true
+        },
+        {
+          "key": "authToken",
+          "value": "",
           "type": "default",
           "enabled": true
         }

@@ -2,15 +2,18 @@
 
 ## 📚 Índice
 
-1. [Optional - Adiós a los NullPointerException](#optional)
-2. [Streams - Procesamiento de Colecciones](#streams)
-3. [Lambdas y Programación Funcional](#lambdas)
-4. [Colecciones - Cuándo usar cada una](#colecciones)
-5. [Records - DTOs Inmutables](#records)
+1. [Optional - Adiós a los NullPointerException](#optional---adiós-a-los-nullpointerexception)
+2. [Streams - Procesamiento de Colecciones](#streams---procesamiento-de-colecciones)
+3. [Lambdas y Programación Funcional](#lambdas-y-programación-funcional)
+4. [Colecciones - Cuándo usar cada una](#colecciones---cuándo-usar-cada-una)
+5. [Records - DTOs Inmutables](#records---dtos-inmutables)
 6. [Inmutabilidad](#inmutabilidad)
-7. [var - Inferencia de Tipos](#var)
-8. [Try-with-Resources](#try-with-resources)
-9. [Switch Expressions](#switch-expressions)
+7. [final Keyword - Garantizando Inmutabilidad](#final-keyword---garantizando-inmutabilidad)
+8. [Inmutabilidad Profunda (Deep Immutability)](#inmutabilidad-profunda-deep-immutability)
+9. [Records en Profundidad (Java 21)](#records-en-profundidad-java-21)
+10. [var - Inferencia de Tipos](#var---inferencia-de-tipos-java-10)
+11. [Try-with-Resources](#try-with-resources)
+12. [Switch Expressions](#switch-expressions-java-14)
 
 ---
 
@@ -1008,6 +1011,652 @@ public class Order {
 2. **Predecible**: El objeto no cambia inesperadamente
 3. **Cacheable**: Puedes guardar referencias sin preocuparte
 4. **Testeable**: Fácil de probar (sin estado mutable)
+
+---
+
+## final Keyword - Garantizando Inmutabilidad
+
+### ¿Qué es final?
+
+`final` es una palabra clave que **previene modificaciones**:
+- **Variables**: No se puede cambiar el valor/referencia
+- **Métodos**: No se pueden sobrescribir (override)
+- **Clases**: No se pueden heredar (extend)
+
+---
+
+### final en Variables
+
+```java
+// Variables locales
+final String name = "John";
+name = "Jane";  // ❌ Error de compilación
+
+// Parámetros de método
+public void processUser(final User user) {
+    user = new User();  // ❌ Error de compilación
+    user.setName("x");  // ✅ OK - solo la referencia es final
+}
+
+// Campos de clase
+public class User {
+    private final UUID id;  // ✅ Debe inicializarse en constructor
+    private final String name;
+
+    public User(UUID id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+
+    // No hay setters - inmutable ✅
+}
+```
+
+**IMPORTANTE:** `final` en una variable **NO hace el objeto inmutable**, solo la referencia:
+
+```java
+final List<String> list = new ArrayList<>();
+list = new ArrayList<>();  // ❌ Error - no puedes cambiar la referencia
+list.add("item");          // ✅ OK - el objeto List sigue siendo mutable
+
+// Para inmutabilidad real, usa colecciones inmutables:
+final List<String> immutableList = List.of("a", "b");
+immutableList.add("c");  // ❌ UnsupportedOperationException
+```
+
+---
+
+### final en Clases
+
+```java
+// ✅ Clase final - no se puede heredar
+public final class Email {
+    private final String value;
+
+    public Email(String value) {
+        this.value = value;
+    }
+}
+
+// ❌ Error de compilación
+public class GmailEmail extends Email {  // No se puede heredar de final
+}
+```
+
+**¿Cuándo hacer una clase final?**
+- ✅ Value Objects (Email, Username, Money)
+- ✅ DTOs que no necesitan herencia
+- ✅ Clases utilitarias (sin estado)
+- ✅ Cuando quieres garantizar comportamiento inmutable
+
+---
+
+### final en Métodos
+
+```java
+public class BaseService {
+    // ✅ Método final - no se puede sobrescribir
+    public final void validateInput(String input) {
+        if (input == null) throw new IllegalArgumentException();
+    }
+
+    // Método normal - se puede sobrescribir
+    public void process(String input) {
+        validateInput(input);
+        // ... procesamiento
+    }
+}
+
+public class ExtendedService extends BaseService {
+    @Override
+    public void validateInput(String input) {  // ❌ Error - método es final
+        // ...
+    }
+
+    @Override
+    public void process(String input) {  // ✅ OK - método no es final
+        // ...
+    }
+}
+```
+
+**¿Cuándo hacer un método final?**
+- ✅ Métodos críticos de seguridad
+- ✅ Métodos de validación
+- ✅ Template methods que no deben cambiar
+
+---
+
+### Ejemplo Completo del Proyecto
+
+```java
+/**
+ * Value Object inmutable
+ * - Clase final: No se puede heredar
+ * - Campo final: No se puede modificar
+ * - Sin setters: No hay mutación
+ */
+public final class Email {
+
+    private final String value;  // ✅ Campo final - inmutable
+
+    private Email(String value) {  // Constructor privado
+        this.value = value;
+    }
+
+    // ✅ Factory method estático
+    public static Email of(final String value) {  // ✅ Parámetro final
+        validate(value);
+        return new Email(value);
+    }
+
+    private static void validate(final String value) {
+        if (value == null || value.isBlank()) {
+            throw new ValidationException("Email no puede estar vacío");
+        }
+        if (!value.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")) {
+            throw new ValidationException("Email inválido");
+        }
+    }
+
+    public String getValue() {
+        return value;  // ✅ Solo getter, no setter
+    }
+
+    // ✅ Para "modificar", crear nuevo objeto
+    public final Email withDomain(final String newDomain) {
+        String localPart = value.split("@")[0];
+        return Email.of(localPart + "@" + newDomain);
+    }
+}
+```
+
+Ver ejemplo real: `src/main/java/com/example/hexarch/user/domain/model/valueobject/Email.java`
+
+---
+
+## Inmutabilidad Profunda (Deep Immutability)
+
+### Shallow vs Deep Immutability
+
+```java
+// ❌ SHALLOW IMMUTABILITY (solo la referencia es final)
+public final class Order {
+    private final List<Item> items;  // Lista es final, pero es MUTABLE
+    private final Customer customer;  // Customer puede ser mutable
+
+    public Order(List<Item> items, Customer customer) {
+        this.items = items;      // ⚠️ Referencia compartida!
+        this.customer = customer;  // ⚠️ Objeto mutable!
+    }
+
+    public List<Item> getItems() {
+        return items;  // ⚠️ Expone lista mutable!
+    }
+}
+
+// Problema:
+List<Item> originalItems = new ArrayList<>();
+Order order = new Order(originalItems, customer);
+
+originalItems.add(newItem);  // 💥 Modificó el Order desde fuera!
+order.getItems().clear();     // 💥 Modificó el Order desde dentro!
+customer.setName("changed");   // 💥 Modificó el Customer!
+```
+
+```java
+// ✅ DEEP IMMUTABILITY (todo es inmutable)
+public final class Order {
+    private final List<Item> items;  // Copia defensiva
+    private final Customer customer;  // Inmutable
+
+    public Order(List<Item> items, Customer customer) {
+        // ✅ Copia defensiva en el constructor
+        this.items = List.copyOf(items);  // Inmutable
+        this.customer = customer;  // Asume que Customer es inmutable
+    }
+
+    public List<Item> getItems() {
+        // ✅ Ya es inmutable por List.copyOf()
+        return items;
+    }
+
+    // ✅ Para "modificar", crear nuevo Order
+    public Order addItem(Item newItem) {
+        List<Item> newItems = new ArrayList<>(this.items);
+        newItems.add(newItem);
+        return new Order(newItems, this.customer);
+    }
+}
+```
+
+---
+
+### Defensive Copying (Copias Defensivas)
+
+**Regla:** Nunca confíes en referencias que vienen de fuera o salen hacia fuera.
+
+```java
+public final class User {
+    private final List<Role> roles;  // Lista de roles
+
+    // ✅ CORRECTO: Copia defensiva en constructor
+    public User(List<Role> roles) {
+        this.roles = List.copyOf(roles);  // Inmutable
+        // Alternativas:
+        // this.roles = Collections.unmodifiableList(new ArrayList<>(roles));
+        // this.roles = new ArrayList<>(roles);  // Si quieres mutable interno
+    }
+
+    // ✅ CORRECTO: Devolver copia inmutable
+    public List<Role> getRoles() {
+        return roles;  // Ya es inmutable por List.copyOf()
+        // O si es mutable interno:
+        // return List.copyOf(roles);
+        // return Collections.unmodifiableList(roles);
+    }
+}
+```
+
+**Ejemplo Real del Proyecto:**
+
+```java
+// En User.java (Aggregate Root)
+public final class User {
+    private final UUID id;
+    private final Username username;  // ✅ Username es inmutable
+    private final Email email;        // ✅ Email es inmutable
+    private final boolean enabled;
+    private final Instant createdAt;  // ✅ Instant es inmutable
+
+    // ✅ Todo es final e inmutable (deep immutability)
+
+    // No hay setters - para "modificar", crear nuevo User
+    public User withUsername(Username newUsername) {
+        return new User(this.id, newUsername, this.email, this.enabled, this.createdAt);
+    }
+}
+```
+
+Ver código completo: `src/main/java/com/example/hexarch/user/domain/model/User.java:1-142`
+
+---
+
+### Colecciones Inmutables en Detalle
+
+```java
+// ========================================
+// COLECCIONES INMUTABLES (Java 9+)
+// ========================================
+
+// ✅ List.of() - Inmutable, tamaño fijo, no acepta null
+List<String> list = List.of("a", "b", "c");
+list.add("d");     // ❌ UnsupportedOperationException
+list.set(0, "x");  // ❌ UnsupportedOperationException
+list.remove(0);    // ❌ UnsupportedOperationException
+
+// ✅ Set.of() - Inmutable, sin duplicados, no acepta null
+Set<String> set = Set.of("a", "b", "c");
+set.add("d");  // ❌ UnsupportedOperationException
+
+// ✅ Map.of() - Inmutable, no acepta null
+Map<String, Integer> map = Map.of("a", 1, "b", 2, "c", 3);
+map.put("d", 4);  // ❌ UnsupportedOperationException
+
+// Para más de 10 elementos en Map:
+Map<String, Integer> bigMap = Map.ofEntries(
+    Map.entry("a", 1),
+    Map.entry("b", 2),
+    // ... más entradas
+);
+
+// ========================================
+// ALTERNATIVAS PRE-JAVA 9
+// ========================================
+
+// Collections.unmodifiableList() - Inmutable VIEW (la original puede cambiar)
+List<String> original = new ArrayList<>(Arrays.asList("a", "b"));
+List<String> unmodifiable = Collections.unmodifiableList(original);
+
+unmodifiable.add("c");  // ❌ UnsupportedOperationException
+original.add("c");      // ✅ OK - modifica la original
+System.out.println(unmodifiable);  // [a, b, c] ⚠️ Cambió!
+
+// ✅ Copia inmutable real
+List<String> immutable = List.copyOf(original);
+original.add("d");
+System.out.println(immutable);  // [a, b] ✅ No cambió
+
+// ========================================
+// COMPARACIÓN
+// ========================================
+```
+
+| Método | Inmutable | Acepta null | Performance | Versión |
+|--------|-----------|-------------|-------------|---------|
+| `List.of()` | ✅ Sí | ❌ No | ⚡ Rápido | Java 9+ |
+| `List.copyOf()` | ✅ Sí | ❌ No | ⚡ Rápido | Java 10+ |
+| `Collections.unmodifiableList()` | ⚠️ View | ✅ Sí | ⚡ Rápido | Java 1.2+ |
+| `new ArrayList<>()` | ❌ No | ✅ Sí | 🐌 Lento | Siempre |
+
+**Recomendación:** Usa `List.of()`, `Set.of()`, `Map.of()` en Java 9+
+
+---
+
+## Records en Profundidad (Java 21)
+
+### Compact Constructor - Validaciones
+
+El **compact constructor** es la forma idiomática de validar Records:
+
+```java
+// ✅ Compact Constructor (sin parámetros explícitos)
+public record Email(String value) {
+
+    // ✅ Este es el compact constructor
+    public Email {
+        // Se ejecuta ANTES de asignar los campos
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("Email vacío");
+        }
+        if (!value.contains("@")) {
+            throw new IllegalArgumentException("Email inválido");
+        }
+        // No necesitas asignar: this.value = value;
+        // El compilador lo hace automáticamente DESPUÉS de la validación
+    }
+}
+
+// ❌ Constructor canónico explícito (más verboso)
+public record Email(String value) {
+
+    public Email(String value) {  // Constructor canónico
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("Email vacío");
+        }
+        this.value = value;  // ❌ Necesitas asignación explícita
+    }
+}
+```
+
+**Ventaja del Compact Constructor:**
+- Más conciso (no repites los parámetros)
+- No necesitas asignación explícita
+- El compilador garantiza que todos los campos se inicializan
+
+---
+
+### Records con Normalización
+
+```java
+public record Username(String value) {
+
+    public Username {
+        // Validar
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("Username vacío");
+        }
+
+        // ✅ Normalizar (trim, lowercase)
+        value = value.trim().toLowerCase();
+
+        // Validar después de normalizar
+        if (value.length() < 3 || value.length() > 50) {
+            throw new IllegalArgumentException("Username debe tener 3-50 caracteres");
+        }
+    }
+}
+
+// Uso:
+Username u1 = new Username("  JohnDoe  ");  // Normaliza a "johndoe"
+Username u2 = new Username("johndoe");
+u1.equals(u2);  // true - son iguales después de normalización
+```
+
+---
+
+### Records vs Clases - Comparación Detallada
+
+| Característica | Record | Clase Normal |
+|----------------|--------|--------------|
+| **Boilerplate** | ⚡ Mínimo (~5 líneas) | 🐌 Mucho (~50 líneas) |
+| **Inmutabilidad** | ✅ Garantizada | ⚠️ Manual |
+| **Herencia** | ❌ No puede extender (solo implementar interfaces) | ✅ Puede extender |
+| **Campos** | ✅ Todos final, públicos (vía accessors) | ⚠️ Tú decides |
+| **Constructor** | ✅ Automático (canónico + compacto) | ⚠️ Manual |
+| **equals/hashCode** | ✅ Automático (por valor) | ⚠️ Manual o @EqualsAndHashCode |
+| **toString** | ✅ Automático | ⚠️ Manual o @ToString |
+| **Serialización** | ✅ Funciona con Jackson/JPA | ✅ Funciona |
+| **Métodos adicionales** | ✅ Puedes agregar | ✅ Puedes agregar |
+| **Uso típico** | DTOs, Value Objects simples, Commands/Queries | Entities, Aggregates, Services |
+
+---
+
+### Records con Jackson (Serialización JSON)
+
+```java
+// ✅ Records funcionan perfectamente con Jackson
+public record CreateUserRequest(
+    String username,
+    String email
+) {}
+
+// Deserialización (JSON → Record)
+String json = """
+    {
+        "username": "johndoe",
+        "email": "john@example.com"
+    }
+    """;
+
+ObjectMapper mapper = new ObjectMapper();
+CreateUserRequest request = mapper.readValue(json, CreateUserRequest.class);
+// ✅ Jackson usa el constructor canónico
+
+// Serialización (Record → JSON)
+String jsonOutput = mapper.writeValueAsString(request);
+// {"username":"johndoe","email":"john@example.com"}
+
+// ✅ Con Jackson annotations
+public record UserResponse(
+    @JsonProperty("user_id") String id,  // Cambia nombre en JSON
+    String username,
+    String email,
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+    Instant createdAt
+) {}
+```
+
+---
+
+### Records con Bean Validation
+
+```java
+// ✅ Records con validaciones de Bean Validation
+public record CreateUserRequest(
+    @NotBlank(message = "Username es requerido")
+    @Size(min = 3, max = 50, message = "Username debe tener 3-50 caracteres")
+    String username,
+
+    @NotBlank(message = "Email es requerido")
+    @Email(message = "Email debe ser válido")
+    String email
+) {}
+
+// Validación automática en Controllers
+@PostMapping("/users")
+public ResponseEntity<UserResponse> createUser(
+    @Valid @RequestBody CreateUserRequest request  // @Valid activa validaciones
+) {
+    // Si la validación falla, Spring lanza MethodArgumentNotValidException
+    // ...
+}
+```
+
+---
+
+### Cuándo NO Usar Records
+
+❌ **No uses Records cuando:**
+
+1. **Necesitas herencia (extends)**
+   ```java
+   // ❌ Records NO pueden extender clases
+   public record AdminUser(String username) extends User { }  // Error
+
+   // ✅ Usa clase normal si necesitas herencia
+   public class AdminUser extends User {
+       public AdminUser(String username) {
+           super(username);
+       }
+   }
+   ```
+
+2. **Necesitas mutabilidad (setters)**
+   ```java
+   // ❌ Records son inmutables
+   public record User(String name) {
+       public void setName(String name) {  // No tiene sentido
+           this.name = name;  // ❌ final, no se puede cambiar
+       }
+   }
+
+   // ✅ Usa clase normal si necesitas mutabilidad
+   public class User {
+       private String name;
+       public void setName(String name) {
+           this.name = name;
+       }
+   }
+   ```
+
+3. **Aggregates con lógica compleja**
+   ```java
+   // ❌ Record para Aggregate con mucha lógica (no idiomático)
+   public record User(UUID id, String username, String email) {
+       public void validateBusinessRules() { }
+       public void applyDomainEvent() { }
+       // ... 50 métodos más
+   }
+
+   // ✅ Usa clase normal para Aggregates
+   public class User {
+       // Lógica de dominio compleja
+   }
+   ```
+
+4. **Necesitas control fino sobre equals/hashCode**
+   ```java
+   // ❌ Record usa TODOS los campos para equals
+   public record User(UUID id, String username, Instant lastLogin) {}
+   // lastLogin participa en equals (probablemente no quieres eso)
+
+   // ✅ Usa clase normal si necesitas equals customizado
+   public class User {
+       @Override
+       public boolean equals(Object o) {
+           // Solo comparar por id
+       }
+   }
+   ```
+
+---
+
+### Resumen: ¿Record o Clase?
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    DECISION TREE                             │
+└─────────────────────────────────────────────────────────────┘
+
+¿Es un DTO inmutable?
+├─ Sí → ✅ Record
+└─ No ↓
+
+¿Es un Value Object simple?
+├─ Sí → ✅ Record
+└─ No ↓
+
+¿Necesitas herencia?
+├─ Sí → ❌ Clase normal
+└─ No ↓
+
+¿Necesitas mutabilidad?
+├─ Sí → ❌ Clase normal
+└─ No ↓
+
+¿Tiene lógica de negocio compleja?
+├─ Sí → ❌ Clase normal (Aggregate/Entity)
+└─ No → ✅ Record
+```
+
+---
+
+### Ejemplos del Proyecto con Records
+
+```java
+// ✅ Commands (CQRS Write side)
+public record CreateUserCommand(String username, String email) {}
+
+// ✅ Queries (CQRS Read side)
+public record GetUserQuery(UUID userId) {}
+
+// ✅ Results (DTOs de retorno)
+public record UserResult(
+    UUID id,
+    String username,
+    String email,
+    boolean enabled,
+    Instant createdAt
+) {
+    // Factory method
+    public static UserResult from(User user) {
+        return new UserResult(
+            user.getId(),
+            user.getUsername().getValue(),
+            user.getEmail().getValue(),
+            user.isEnabled(),
+            user.getCreatedAt()
+        );
+    }
+}
+
+// ✅ Domain Events
+public record UserCreatedEvent(
+    UUID userId,
+    String username,
+    String email,
+    Instant occurredAt
+) {
+    public static UserCreatedEvent from(User user) {
+        return new UserCreatedEvent(
+            user.getId(),
+            user.getUsername().getValue(),
+            user.getEmail().getValue(),
+            Instant.now()
+        );
+    }
+}
+
+// ✅ REST DTOs (OpenAPI generated)
+public record CreateUserRequest(
+    @NotBlank String username,
+    @Email String email
+) {}
+
+public record UserResponse(
+    String id,
+    String username,
+    String email,
+    boolean enabled,
+    Instant createdAt
+) {}
+```
+
+Ver ejemplos reales en:
+- Commands: `src/main/java/.../application/port/input/`
+- DTOs: `src/main/java/.../infrastructure/adapter/input/rest/dto/`
+- Events: `src/main/java/.../domain/event/`
 
 ---
 

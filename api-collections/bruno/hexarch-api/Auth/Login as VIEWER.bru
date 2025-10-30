@@ -1,0 +1,86 @@
+meta {
+  name: Login as VIEWER
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/login
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "username": "viewer",
+    "role": "VIEWER"
+  }
+}
+
+docs {
+  # Login as VIEWER
+
+  Generates a JWT token with **VIEWER** role for testing purposes.
+
+  ## Viewer Permissions (Read-Only)
+  - ✅ Read users
+  - ❌ Create users
+  - ❌ Update users
+  - ❌ Delete users
+
+  ## Use Case
+  Perfect for testing read-only access scenarios and permission-based
+  authorization. Useful to verify that write operations return 403 Forbidden
+  when attempted with a VIEWER token.
+
+  ## Token Auto-Save
+  The token is automatically saved to the `authToken` environment variable.
+
+  ## Testing Authorization
+  1. Login as VIEWER (run this request)
+  2. Try "Get User by ID" → ✅ Should work (200 OK)
+  3. Try "Create User" → ❌ Should fail (403 Forbidden)
+
+  ## Expected Response
+  ```json
+  {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "type": "Bearer",
+    "username": "viewer",
+    "roles": ["VIEWER"],
+    "expiresIn": 86400000
+  }
+  ```
+}
+
+tests {
+  test("Status code should be 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Response should have token", function() {
+    expect(res.getBody().token).to.be.a('string');
+  });
+
+  test("Role should be VIEWER", function() {
+    expect(res.getBody().roles).to.include('VIEWER');
+  });
+
+  test("Token should be saved to environment", function() {
+    expect(bru.getEnvVar("authToken")).to.be.a('string');
+  });
+}
+
+script:post-response {
+  // Auto-save token to environment variable
+  if (res.getStatus() === 200) {
+    const token = res.getBody().token;
+    bru.setEnvVar("authToken", token);
+    console.log("✅ Token saved to authToken variable");
+    console.log("🔑 Token expires in:", res.getBody().expiresIn / 1000 / 60, "minutes");
+  }
+}

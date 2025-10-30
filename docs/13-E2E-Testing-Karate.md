@@ -13,6 +13,12 @@
 5. [¿Por Qué Karate?](#5-por-qué-karate)
 6. [Estructura de los Tests E2E](#6-estructura-de-los-tests-e2e)
 7. [Cómo Ejecutar los Tests](#7-cómo-ejecutar-los-tests)
+   - [7.1. Entendiendo los 3 Modos](#71-entendiendo-los-3-modos-de-ejecución)
+   - [7.2. Modo 1: LOCAL](#72-modo-1-local-desarrollo-manual)
+   - [7.3. Modo 2: DOCKER](#73-modo-2-docker-validación-pre-producción)
+   - [7.4. Modo 3: TESTCONTAINERS 🚀](#74-modo-3-testcontainers-cicd-automático--recomendado)
+   - [7.5. Ejecutar UN SOLO Scenario](#75-ejecutar-un-solo-scenario-debugging)
+   - [7.6. Ejecutar en Paralelo](#76-ejecutar-en-paralelo-más-rápido)
 8. [Escribir Tests con Karate](#8-escribir-tests-con-karate)
 9. [Best Practices](#9-best-practices)
 10. [Troubleshooting](#10-troubleshooting)
@@ -518,7 +524,54 @@ Feature: Create User - E2E Test
 
 ## 7. Cómo Ejecutar los Tests
 
-### 7.1. Modo LOCAL (desarrollo)
+### 7.1. 🔍 Entendiendo los 3 Modos de Ejecución
+
+Existen **3 formas** de ejecutar E2E tests, cada una con sus ventajas:
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│ MODO 1: LOCAL (Desarrollo Manual)                             │
+├────────────────────────────────────────────────────────────────┤
+│ App: ./mvnw spring-boot:run (proceso local Java)              │
+│ Infra: docker-compose up -d (PostgreSQL, Kafka)               │
+│ Tests: Karate hace HTTP a localhost:8080                      │
+│                                                                │
+│ ✅ Hot reload con DevTools                                    │
+│ ✅ Debugging fácil desde IDE                                  │
+│ ❌ Requiere setup manual (3 terminales)                       │
+│ 📋 Uso: Desarrollo día a día                                  │
+└────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────┐
+│ MODO 2: DOCKER (Validación Pre-Producción)                    │
+├────────────────────────────────────────────────────────────────┤
+│ App: docker-compose (imagen Docker)                           │
+│ Infra: docker-compose (PostgreSQL, Kafka)                     │
+│ Tests: Karate hace HTTP a localhost:8080 (port mapping)       │
+│                                                                │
+│ ✅ Entorno idéntico a producción                              │
+│ ✅ Valida imagen Docker real                                  │
+│ ❌ Build lento (Docker build)                                 │
+│ 📋 Uso: Pre-release, validación final                         │
+└────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────┐
+│ MODO 3: TESTCONTAINERS (CI/CD Automático) 🚀 RECOMENDADO      │
+├────────────────────────────────────────────────────────────────┤
+│ App: @SpringBootTest(webEnvironment = RANDOM_PORT)            │
+│ Infra: Testcontainers (PostgreSQL, Kafka automáticos)         │
+│ Tests: Karate hace HTTP al puerto aleatorio de Spring         │
+│                                                                │
+│ ✅ Todo en un solo comando (./mvnw test)                      │
+│ ✅ GRATIS en GitHub Actions (Docker preinstalado)             │
+│ ✅ Auto-cleanup (contenedores se eliminan al terminar)        │
+│ ✅ No requiere docker-compose.yml                             │
+│ ⚡ Rápido (~5 min vs ~10 min Docker Mode)                     │
+│ 📋 Uso: GitHub Actions, CI/CD pipelines                       │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### 7.2. Modo 1: LOCAL (desarrollo manual)
 
 **Pre-requisitos**:
 1. Tener Docker Compose corriendo (PostgreSQL + Kafka)
@@ -540,12 +593,14 @@ docker-compose up -d postgres kafka
 **Desde IDE** (IntelliJ IDEA / VS Code):
 - Click derecho en `KarateE2ELocalTest.java` → Run
 
-**Ventajas del modo local**:
+**Ventajas**:
 - ⚡ Rápido (no requiere Docker build)
 - 🐛 Fácil debugging desde IDE
 - 🔥 Hot reload con Spring Boot DevTools
 
-### 7.2. Modo DOCKER (CI/CD)
+**Cuándo usar**: Desarrollo día a día, debugging de features
+
+### 7.3. Modo 2: DOCKER (validación pre-producción)
 
 **Pre-requisitos**:
 1. Tener Docker Compose completo corriendo (app + PostgreSQL + Kafka)
@@ -570,13 +625,119 @@ docker logs hexarch-app --follow
 ./mvnw test -Dtest=KarateE2EDockerTest -Dkarate.env=docker
 ```
 
-**Ventajas del modo Docker**:
+**Ventajas**:
 - ✅ Entorno idéntico a producción
 - ✅ Valida imagen Docker real
-- ✅ Perfecto para CI/CD pipelines
 - ✅ No requiere Java local (solo Docker)
 
-### 7.3. Ejecutar UN SOLO Scenario (debugging)
+**Desventajas**:
+- ❌ Build lento (~5-10 minutos)
+- ❌ Debugging complejo
+- ❌ Requiere docker-compose.yml configurado
+
+**Cuándo usar**: Pre-release, validación final antes de producción
+
+### 7.4. Modo 3: TESTCONTAINERS (CI/CD automático) 🚀 **RECOMENDADO**
+
+**Pre-requisitos**:
+1. Tener Docker instalado (pero NO requiere docker-compose corriendo)
+2. Tener Maven instalado
+
+**Pasos** (¡TODO EN UN COMANDO!):
+
+```bash
+# ✨ Un solo comando ejecuta TODO:
+# - Levanta Testcontainers (PostgreSQL, Kafka)
+# - Levanta la aplicación (@SpringBootTest)
+# - Ejecuta tests E2E con Karate
+# - Limpia todo al terminar
+./mvnw test -Pe2e-tests -Dkarate.env=local
+```
+
+**¿Cómo funciona internamente?**
+
+```java
+@SpringBootTest(webEnvironment = RANDOM_PORT)  // ← App en puerto aleatorio
+@Testcontainers  // ← Testcontainers maneja infraestructura
+class KarateE2ETestcontainersTest {
+
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
+
+    @Container
+    static KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
+
+    @LocalServerPort  // ← Puerto aleatorio de Spring Boot
+    private int port;
+
+    @Test
+    void runE2ETests() {
+        // Karate hace HTTP requests a http://localhost:{port}
+        // La app usa PostgreSQL y Kafka de Testcontainers
+    }
+}
+```
+
+**Ventajas** (por eso es RECOMENDADO):
+- ⚡ **Todo automático**: Un solo comando
+- 💰 **GRATIS en GitHub Actions**: Docker viene preinstalado
+- 🧹 **Auto-cleanup**: Contenedores se eliminan solos
+- ⚡ **Rápido**: ~5 minutos (vs ~10 min Docker Mode)
+- 🎯 **No requiere setup manual**: No más 3 terminales
+- 🔧 **No requiere docker-compose.yml**: Testcontainers lo maneja
+- 🛡️ **Puertos aleatorios**: No hay conflictos
+
+**Desventajas**:
+- ❌ No valida imagen Docker final (solo código Java)
+- ❌ Debugging menos intuitivo que Local Mode
+
+**Cuándo usar**:
+- ✅ **GitHub Actions / GitLab CI / Jenkins** (CI/CD pipelines)
+- ✅ **Desarrollo rápido** (sin levantar docker-compose)
+- ✅ **Pull Request validation**
+
+**Comparación con otros modos**:
+
+| Aspecto | Local | Docker | **Testcontainers** |
+|---------|-------|--------|--------------------|
+| **Setup** | 3 terminales | docker-compose up | ✅ 1 comando |
+| **Velocidad** | ⚡⚡⚡ | ⚡ | ⚡⚡ |
+| **CI/CD** | ❌ Manual | ✅ Funciona | ✅ **Ideal** |
+| **Debugging** | ⚡⚡⚡ | ⚡ | ⚡⚡ |
+| **Auto-cleanup** | ❌ Manual | ❌ Manual | ✅ Automático |
+| **Costo GitHub** | N/A | ~10 min | ✅ **~5 min** |
+
+**Ejemplo de uso en GitHub Actions**:
+
+Ver `.github/workflows/e2e-tests.yml` - Modo `local` usa este enfoque:
+
+```yaml
+- name: 🏃 Run E2E tests (Local Mode with Testcontainers)
+  run: ./mvnw test -Pe2e-tests -Dkarate.env=local
+  env:
+    TESTCONTAINERS_RYUK_DISABLED: false
+```
+
+**Por qué NO se llama "Testcontainers Mode" sino "Local Mode"?**
+
+Porque desde la perspectiva de **Karate**, está haciendo requests a `localhost` (la app corre localmente con @SpringBootTest). Solo la **infraestructura** (PostgreSQL, Kafka) corre en Testcontainers.
+
+```
+┌──────────────────────────────────────────────────────┐
+│ Karate (test code)                                   │
+│   ↓ HTTP request a localhost:random_port            │
+│ ┌────────────────────────────────────────────────┐  │
+│ │ @SpringBootTest (app en proceso local)         │  │
+│ │   ↓ JDBC                  ↓ Kafka               │  │
+│ │ ┌──────────────┐     ┌──────────────┐          │  │
+│ │ │ Testcontainer│     │ Testcontainer│          │  │
+│ │ │ (PostgreSQL) │     │ (Kafka)      │          │  │
+│ │ └──────────────┘     └──────────────┘          │  │
+│ └────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────┘
+```
+
+### 7.5. Ejecutar UN SOLO Scenario (debugging)
 
 ```bash
 # Ejecutar solo un feature file específico
@@ -586,7 +747,7 @@ docker logs hexarch-app --follow
 ./mvnw test -Dtest=KarateE2ELocalTest -Dkarate.env=local -Dkarate.options="--tags @debug"
 ```
 
-### 7.4. Ejecutar en Paralelo (más rápido)
+### 7.6. Ejecutar en Paralelo (más rápido)
 
 Editar `KarateE2ELocalTest.java`:
 
@@ -843,9 +1004,10 @@ target/karate-reports/
 ### ✅ Qué Hemos Implementado
 
 1. **Karate E2E Tests**: Tests end-to-end con sintaxis Gherkin
-2. **Dos Modos de Ejecución**:
-   - Local: Para desarrollo rápido
-   - Docker: Para CI/CD y validación de imagen Docker
+2. **Tres Modos de Ejecución**:
+   - **Local**: Para desarrollo rápido (app local + docker-compose)
+   - **Docker**: Para validación final (app en Docker + docker-compose)
+   - **Testcontainers** 🚀: Para CI/CD automático (todo en un comando)
 3. **Feature Files**: create-user.feature, get-user.feature
 4. **Test Pyramid**: 65% Unit, 15% Integration, 10% E2E
 

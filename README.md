@@ -4,6 +4,7 @@
 [![Build](https://github.com/victormartingil/basic-hexagonal-architecture-example/actions/workflows/build.yml/badge.svg)](https://github.com/victormartingil/basic-hexagonal-architecture-example/actions/workflows/build.yml)
 [![Architecture](https://github.com/victormartingil/basic-hexagonal-architecture-example/actions/workflows/architecture.yml/badge.svg)](https://github.com/victormartingil/basic-hexagonal-architecture-example/actions/workflows/architecture.yml)
 [![Integration Tests](https://github.com/victormartingil/basic-hexagonal-architecture-example/actions/workflows/integration-tests.yml/badge.svg)](https://github.com/victormartingil/basic-hexagonal-architecture-example/actions/workflows/integration-tests.yml)
+[![E2E Tests](https://github.com/victormartingil/basic-hexagonal-architecture-example/actions/workflows/e2e-tests.yml/badge.svg)](https://github.com/victormartingil/basic-hexagonal-architecture-example/actions/workflows/e2e-tests.yml)
 
 > **Nota:** Los badges de SonarCloud están deshabilitados por defecto. Ver sección "Code Quality" para configuración opcional.
 
