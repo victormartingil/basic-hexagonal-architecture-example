@@ -19,8 +19,9 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
 
 ## ✨ Características Destacadas
 
-- **📋 API-First**: Especificación OpenAPI primero, código generado después
-- **🔍 Swagger UI**: Documentación interactiva de la API
+- **📋 API-First**: Especificación OpenAPI (REST) + AsyncAPI (Eventos Kafka)
+- **🔍 Swagger UI**: Documentación interactiva de la API REST
+- **📡 AsyncAPI**: Documentación completa de eventos Kafka (user.events, DLT)
 - **🏛️ ArchUnit Tests**: 21 tests que validan automáticamente las reglas arquitecturales
 - **📊 Diagramas Mermaid**: Visualizaciones profesionales en las guías (GitHub-friendly)
 - **🎯 CQRS Completo**: Ejemplos de Commands (Write) y Queries (Read)
@@ -622,7 +623,41 @@ curl -X GET http://localhost:8080/api/v1/users/550e8400-e29b-41d4-a716-446655440
 }
 ```
 
-#### Opción C: Bruno / Postman Collections
+#### Opción C: AsyncAPI - Documentación de Eventos Kafka
+
+El proyecto incluye **AsyncAPI specification** para documentar todos los eventos Kafka:
+
+**Archivo**: `src/main/resources/asyncapi/hexarch-events.yaml`
+
+**Visualizar documentación**:
+1. Instala AsyncAPI CLI globalmente:
+   ```bash
+   npm install -g @asyncapi/cli
+   ```
+
+2. Genera HTML interactivo:
+   ```bash
+   asyncapi generate html src/main/resources/asyncapi/hexarch-events.yaml -o asyncapi-docs
+   ```
+
+3. O usa AsyncAPI Studio online:
+   - Visita: https://studio.asyncapi.com/
+   - Importa el archivo `hexarch-events.yaml`
+
+**Qué incluye:**
+- ✅ Especificación completa de `user.events` topic
+- ✅ Schema de `UserCreatedEvent` con validaciones
+- ✅ Dead Letter Topic (DLT) documentation
+- ✅ Headers de distributed tracing (traceId, spanId, correlationId)
+- ✅ Ejemplos de payloads
+- ✅ Consumer groups y estrategia de offset
+- ✅ Configuración de producción vs desarrollo
+
+**Eventos disponibles:**
+- `UserCreatedEvent`: Se publica cuando se crea un usuario
+- Topics: `user.events` (principal), `user.events.dlt` (fallidos)
+
+#### Opción D: Bruno / Postman Collections
 
 Para una experiencia profesional de testing, importa las colecciones preconfigurables:
 

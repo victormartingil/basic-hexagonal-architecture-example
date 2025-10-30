@@ -1,0 +1,266 @@
+asyncapi: 3.0.0
+
+info:
+  title: Hexarch User Service - Event-Driven API
+  version: 1.0.0
+  description: |
+    **Event-Driven Architecture** para el User Service usando Apache Kafka.
+
+    Este servicio publica eventos de dominio cuando ocurren cambios en usuarios.
+    Otros microservicios pueden suscribirse a estos eventos para mantener sincronización.
+
+    ## Patrones Implementados
+    - **Event Sourcing**: Todos los cambios se registran como eventos
+    - **Event-Driven Architecture**: Comunicación asíncrona entre servicios
+    - **Dead Letter Topic (DLT)**: Manejo de errores con retry automático
+    - **Circuit Breaker**: Resiliencia ante fallos de consumidores
+
+    ## Topics Kafka
+    - `user.events`: Eventos de usuario (creación, actualización, eliminación)
+    - `user.events.dlt`: Dead Letter Topic para eventos fallidos
+
+  contact:
+    name: Hexarch Team
+    email: team@hexarch.com
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  development:
+    host: localhost:9092
+    protocol: kafka
+    description: Kafka broker local para desarrollo
+    tags:
+      - name: env:development
+
+  production:
+    host: kafka.production.example.com:9092
+    protocol: kafka-secure
+    description: Kafka cluster en producción
+    security:
+      - $ref: '#/components/securitySchemes/saslScram'
+    tags:
+      - name: env:production
+
+channels:
+  userEvents:
+    address: user.events
+    messages:
+      userCreated:
+        $ref: '#/components/messages/UserCreatedEvent'
+    description: |
+      **Topic principal** para eventos de usuarios.
+
+      Publicadores: User Service
+      Consumidores: Notification Service, Analytics Service, Audit Service
+
+      Particiones: 3 (distribución por userId)
+      Retención: 7 días
+
+  userEventsDLT:
+    address: user.events.dlt
+    messages:
+      userCreatedDLT:
+        $ref: '#/components/messages/UserCreatedEvent'
+    description: |
+      **Dead Letter Topic** para eventos fallidos.
+
+      Los eventos que fallan después de 3 reintentos se envían aquí.
+      Permite investigación manual y reprocesamiento.
+
+      Retención: 30 días (mayor para análisis)
+
+operations:
+  publishUserCreated:
+    action: send
+    channel:
+      $ref: '#/channels/userEvents'
+    summary: Publica evento UserCreated
+    description: |
+      Se publica cuando un nuevo usuario es creado exitosamente en el sistema.
+
+      **Trigger**: POST /api/v1/users (comando CreateUser)
+      **Publisher**: User Service
+      **Garantía**: At-least-once (idempotente)
+
+    messages:
+      - $ref: '#/components/messages/UserCreatedEvent'
+    traits:
+      - $ref: '#/components/operationTraits/kafka'
+
+  subscribeUserCreated:
+    action: receive
+    channel:
+      $ref: '#/channels/userEvents'
+    summary: Consume evento UserCreated
+    description: |
+      Consumidores reciben notificación de nuevos usuarios.
+
+      **Consumers**:
+      - Notification Service: Envía email de bienvenida
+      - Analytics Service: Actualiza métricas de usuarios
+      - Audit Service: Registra auditoría de cambios
+
+      **Consumer Group**: hexarch-user-service
+      **Offset Strategy**: Earliest
+      **Error Handling**: 3 reintentos → DLT
+
+    messages:
+      - $ref: '#/components/messages/UserCreatedEvent'
+
+components:
+  messages:
+    UserCreatedEvent:
+      name: UserCreatedEvent
+      title: User Created Event
+      summary: Evento publicado cuando un usuario es creado
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/UserCreatedEventPayload'
+      examples:
+        - name: Basic User Created
+          summary: Usuario creado con datos básicos
+          payload:
+            eventId: "550e8400-e29b-41d4-a716-446655440000"
+            eventType: "UserCreated"
+            timestamp: "2024-01-15T10:30:00.123Z"
+            aggregateId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+            version: 1
+            userId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+            username: "johndoe"
+            email: "john@example.com"
+            enabled: true
+            createdAt: "2024-01-15T10:30:00.123Z"
+
+  schemas:
+    UserCreatedEventPayload:
+      type: object
+      description: Payload del evento UserCreated
+      required:
+        - eventId
+        - eventType
+        - timestamp
+        - aggregateId
+        - version
+        - userId
+        - username
+        - email
+        - enabled
+        - createdAt
+      properties:
+        eventId:
+          type: string
+          format: uuid
+          description: ID único del evento (para idempotencia y deduplicación)
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
+        eventType:
+          type: string
+          const: "UserCreated"
+          description: Tipo de evento
+          example: "UserCreated"
+
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp de cuándo ocurrió el evento (ISO 8601 UTC)
+          example: "2024-01-15T10:30:00.123Z"
+
+        aggregateId:
+          type: string
+          format: uuid
+          description: ID del agregado (User) que generó el evento
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+        version:
+          type: integer
+          description: Versión del agregado (para event sourcing)
+          minimum: 1
+          example: 1
+
+        userId:
+          type: string
+          format: uuid
+          description: ID único del usuario creado
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: '^[a-zA-Z0-9_-]+$'
+          description: Username del usuario (alfanumérico, underscore, hyphen)
+          example: "johndoe"
+
+        email:
+          type: string
+          format: email
+          maxLength: 100
+          description: Email del usuario
+          example: "john@example.com"
+
+        enabled:
+          type: boolean
+          description: Si el usuario está habilitado
+          example: true
+
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp de creación del usuario (ISO 8601 UTC)
+          example: "2024-01-15T10:30:00.123Z"
+
+  messageTraits:
+    commonHeaders:
+      headers:
+        type: object
+        properties:
+          correlationId:
+            type: string
+            format: uuid
+            description: ID de correlación para distributed tracing
+            example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+
+          traceId:
+            type: string
+            description: Trace ID de Micrometer Tracing
+            example: "64f0a2b8e9c1d3e4f5a6b7c8"
+
+          spanId:
+            type: string
+            description: Span ID de Micrometer Tracing
+            example: "a1b2c3d4e5f6a7b8"
+
+          causationId:
+            type: string
+            format: uuid
+            description: ID del comando que causó este evento
+            example: "c3d4e5f6-a7b8-9012-cdef-123456789012"
+
+          userId:
+            type: string
+            description: ID del usuario que ejecutó la acción (para auditoría)
+            example: "admin.user"
+
+  operationTraits:
+    kafka:
+      bindings:
+        kafka:
+          groupId: hexarch-user-service
+          clientId: hexarch-user-service-1
+
+  securitySchemes:
+    saslScram:
+      type: scramSha256
+      description: SASL/SCRAM authentication for production Kafka
+
+tags:
+  - name: user
+    description: Eventos relacionados con usuarios
+  - name: domain-events
+    description: Eventos de dominio (Event Sourcing)
+  - name: integration-events
+    description: Eventos de integración entre servicios
