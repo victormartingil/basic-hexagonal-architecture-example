@@ -481,7 +481,87 @@ docker-compose start
 docker-compose down -v
 ```
 
-### 2. Compilar y Ejecutar
+### 2. Configurar Variables de Entorno (Opcional pero Recomendado)
+
+El proyecto usa **JWT (JSON Web Tokens)** para autenticación. Por defecto, usa un secret de desarrollo, pero **en producción DEBES usar un secret propio**.
+
+#### Opción A: Variable de Entorno (Recomendado para Producción)
+
+**Linux/macOS:**
+```bash
+# Generar un secret seguro (256 bits para HMAC-SHA256)
+export JWT_SECRET=$(openssl rand -base64 32)
+
+# O usar un secret específico
+export JWT_SECRET="tu-secret-super-seguro-de-al-menos-32-caracteres"
+
+# Opcional: Configurar tiempo de expiración (en milisegundos)
+export JWT_EXPIRATION=3600000  # 1 hora (recomendado para producción)
+```
+
+**Windows (PowerShell):**
+```powershell
+# Establecer variables de entorno
+$env:JWT_SECRET = "tu-secret-super-seguro-de-al-menos-32-caracteres"
+$env:JWT_EXPIRATION = "3600000"
+```
+
+**Docker:**
+```bash
+# Ejecutar con variables de entorno
+docker run -e JWT_SECRET=your-secret -e JWT_EXPIRATION=3600000 hexarch:latest
+```
+
+**Kubernetes:**
+```yaml
+# secrets.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hexarch-secrets
+type: Opaque
+stringData:
+  jwt-secret: "your-base64-encoded-secret"
+---
+# deployment.yaml
+env:
+  - name: JWT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: hexarch-secrets
+        key: jwt-secret
+```
+
+#### Opción B: Usar Secret por Defecto (Solo Desarrollo)
+
+Si **NO** defines `JWT_SECRET`, la aplicación usa un secret de desarrollo por defecto:
+- ⚠️ **Solo para desarrollo local y educación**
+- ⚠️ **NUNCA usar en producción**
+- ⚠️ **El secret está en el código (application.yaml)**
+
+#### ¿Por Qué Externalizar el Secret?
+
+1. **Seguridad**: Secretos no deben estar en el código fuente
+2. **Rotación**: Puedes cambiar el secret sin recompilar
+3. **Ambientes**: Diferentes secrets para dev/staging/prod
+4. **Compliance**: Estándares de seguridad requieren secrets manager
+5. **Auditoría**: Cambios de secrets quedan registrados
+
+#### Best Practices para Producción
+
+**Nivel Enterprise (Recomendado):**
+- **AWS**: AWS Secrets Manager + AWS Systems Manager Parameter Store
+- **Azure**: Azure Key Vault
+- **GCP**: Google Secret Manager
+- **HashiCorp**: Vault
+- **Kubernetes**: External Secrets Operator
+
+**Nivel Básico (Mínimo Aceptable):**
+- Variables de entorno inyectadas por orchestrator (Kubernetes, Docker Swarm)
+- CI/CD pipeline secrets (GitHub Actions Secrets, GitLab CI/CD Variables)
+- `.env` files con `.gitignore` (solo desarrollo local, nunca commitear)
+
+### 3. Compilar y Ejecutar
 
 ```bash
 # Compilar (excluye integration tests que requieren Docker)

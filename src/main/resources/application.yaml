@@ -216,9 +216,12 @@ logging:
     # Nivel de log para Spring
     org.springframework.web: DEBUG
 
-  # Patrón de log
+  # Patrón de log con Trace ID y Span ID para distributed tracing
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    # Formato: timestamp [traceId,spanId] level - message
+    # traceId: identifica la transacción completa entre servicios
+    # spanId: identifica una operación específica dentro del trace
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%X{traceId},%X{spanId}] %5p - %msg%n"
 
 # ===================================================================
 # CONFIGURACIÓN DE ACTUATOR (Monitoreo)
@@ -228,39 +231,83 @@ management:
     web:
       exposure:
         # Exponer endpoints de actuator
-        include: health,info,metrics
+        # Incluye prometheus para métricas en formato Prometheus
+        include: health,info,metrics,prometheus
 
   endpoint:
     health:
       # Mostrar detalles del health endpoint
       show-details: always
 
+  # ===================================================================
+  # DISTRIBUTED TRACING - Micrometer Tracing
+  # ===================================================================
+  tracing:
+    # Sampling probability (0.0 a 1.0)
+    # 1.0 = 100% de requests son traced (recomendado para desarrollo)
+    # 0.1 = 10% de requests son traced (recomendado para producción con alto tráfico)
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+
+  # ===================================================================
+  # ZIPKIN REPORTER (Opcional)
+  # ===================================================================
+  # Zipkin recibe y visualiza traces distribuidos
+  # Si no tienes Zipkin corriendo, los traces solo se logearán
+  zipkin:
+    tracing:
+      # URL de Zipkin server
+      # Si no está disponible, los traces solo aparecen en logs (no causa errores)
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+
+  # ===================================================================
+  # PROMETHEUS METRICS
+  # ===================================================================
+  metrics:
+    distribution:
+      # Histogramas para medir latencias
+      percentiles-histogram:
+        http.server.requests: true
+
+    # Tags adicionales en todas las métricas
+    tags:
+      application: ${spring.application.name}
+      environment: ${ENVIRONMENT:local}
+
 # ===================================================================
 # CONFIGURACIÓN DE JWT (JSON Web Token)
 # ===================================================================
 jwt:
   # Clave secreta para firmar tokens JWT
-  # ⚠️ IMPORTANTE: En producción REAL, usar variables de entorno o secrets manager
+  # ⚠️ IMPORTANTE: Usar variable de entorno JWT_SECRET en producción
   # ⚠️ NO commitear secretos reales a Git
   #
-  # Esta clave es para desarrollo/educación.
-  # Generada con: openssl rand -base64 32
+  # DEVELOPMENT:
+  # El valor por defecto (después de ":") solo se usa si JWT_SECRET no está definido
+  # Es seguro para desarrollo/educación local
+  #
+  # PRODUCTION:
+  # Siempre definir JWT_SECRET como variable de entorno:
+  # - Docker: -e JWT_SECRET=your-production-secret
+  # - Kubernetes: Secret / ConfigMap
+  # - Cloud: AWS Secrets Manager / Azure Key Vault / HashiCorp Vault
+  #
+  # GENERAR SECRET SEGURO:
+  # openssl rand -base64 32
   #
   # REQUISITOS:
   # - Mínimo 256 bits (32 caracteres) para HMAC-SHA256
   # - Debe ser aleatoria y compleja
-  #
-  # PRODUCCIÓN:
-  # - Usar: ${JWT_SECRET} (variable de entorno)
-  # - O AWS Secrets Manager / Azure Key Vault / HashiCorp Vault
-  secret: 5JYzCkNP8xQ2mVnRwTaFbGdKeShXrUvYy3t6v9yBxE4=
+  # - Cambiar en cada entorno (dev, staging, prod)
+  secret: ${JWT_SECRET:5JYzCkNP8xQ2mVnRwTaFbGdKeShXrUvYy3t6v9yBxE4=}
 
   # Tiempo de expiración del token en milisegundos
-  # 86400000 ms = 24 horas
+  # Configurable vía variable de entorno JWT_EXPIRATION
   #
   # BEST PRACTICES:
   # - Access tokens: 15 min - 1 hora (short-lived)
   # - Refresh tokens: 7-30 días (long-lived)
   #
-  # Para este proyecto educativo: 24 horas
-  expiration: 86400000  # 24 horas
+  # DEFAULT: 24 horas para este proyecto educativo
+  # PRODUCTION: Reducir a 15-60 minutos
+  expiration: ${JWT_EXPIRATION:86400000}  # Default: 24 horas

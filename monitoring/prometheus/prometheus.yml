@@ -1,0 +1,22 @@
+# Prometheus Configuration for Hexarch Microservice
+# This file defines how Prometheus collects metrics from the Spring Boot application
+
+global:
+  scrape_interval: 15s # How frequently to scrape targets by default
+  evaluation_interval: 15s # How frequently to evaluate rules
+
+# Scrape configurations
+scrape_configs:
+  # Scrape metrics from Spring Boot Actuator prometheus endpoint
+  - job_name: 'hexarch-app'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8080']
+        labels:
+          application: 'hexarch'
+          environment: 'local'
+
+  # Scrape Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
