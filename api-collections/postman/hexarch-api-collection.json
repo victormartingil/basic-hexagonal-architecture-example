@@ -1,0 +1,541 @@
+{
+  "info": {
+    "name": "Hexarch User API",
+    "description": "Complete API collection for the Hexarch project - A Spring Boot application demonstrating Hexagonal Architecture with CQRS pattern.\n\n## Features\n- CQRS pattern (Command Query Responsibility Segregation)\n- Clean Architecture / Hexagonal Architecture\n- API-First approach with OpenAPI specification\n- Comprehensive error handling\n- Spring Boot Actuator for monitoring\n\n## Getting Started\n1. Import this collection into Postman\n2. Import the environments file (hexarch-environments.json)\n3. Select the 'Local' environment\n4. Start your application (./mvnw spring-boot:run)\n5. Run the requests\n\n## Environment Setup\nMake sure PostgreSQL is running:\n```bash\ndocker-compose up -d\n```\n\nOr configure your own PostgreSQL instance:\n- Host: localhost:5432\n- Database: hexarch_db\n- Username: postgres\n- Password: postgres",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "hexarch"
+  },
+  "item": [
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Create User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Test status code",
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "// Test response structure",
+                  "pm.test(\"Response has required fields\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('id');",
+                  "    pm.expect(jsonData).to.have.property('username');",
+                  "    pm.expect(jsonData).to.have.property('email');",
+                  "    pm.expect(jsonData).to.have.property('enabled');",
+                  "    pm.expect(jsonData).to.have.property('createdAt');",
+                  "});",
+                  "",
+                  "// Test response data matches request",
+                  "pm.test(\"Response matches request data\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const requestData = JSON.parse(pm.request.body.raw);",
+                  "    pm.expect(jsonData.username).to.eql(requestData.username);",
+                  "    pm.expect(jsonData.email).to.eql(requestData.email);",
+                  "});",
+                  "",
+                  "// Test UUID format",
+                  "pm.test(\"ID is valid UUID\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "    pm.expect(jsonData.id).to.match(uuidRegex);",
+                  "});",
+                  "",
+                  "// Test user is enabled by default",
+                  "pm.test(\"User is enabled by default\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.enabled).to.be.true;",
+                  "});",
+                  "",
+                  "// Test timestamp format",
+                  "pm.test(\"CreatedAt is valid ISO 8601 timestamp\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.createdAt).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}/);",
+                  "});",
+                  "",
+                  "// Save userId to environment for subsequent requests",
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.environment.set(\"userId\", jsonData.id);",
+                  "    console.log(\"Saved userId to environment: \" + jsonData.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"johndoe\",\n  \"email\": \"john@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/{{apiVersion}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "{{apiVersion}}", "users"]
+            },
+            "description": "Creates a new user with the provided username and email.\n\n## CQRS Pattern\nThis is a **Command** operation (Write side of CQRS).\n\n## Business Rules\n- Username must be unique (3-50 characters, alphanumeric, underscore, and hyphen only)\n- Email must be unique and valid format\n\n## Request Body Validation\n\n### Username\n- **Required**: Yes\n- **Min Length**: 3 characters\n- **Max Length**: 50 characters\n- **Pattern**: `^[a-zA-Z0-9_-]+$` (alphanumeric, underscore, hyphen)\n- **Example**: \"johndoe123\", \"user_name\", \"test-user\"\n\n### Email\n- **Required**: Yes\n- **Format**: Valid email address\n- **Max Length**: 100 characters\n- **Example**: \"user@example.com\"\n\n## Expected Responses\n\n### 201 Created\nUser created successfully. Returns the user object with generated ID and timestamp.\n\n```json\n{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"username\": \"johndoe\",\n  \"email\": \"john@example.com\",\n  \"enabled\": true,\n  \"createdAt\": \"2024-01-15T10:30:00.123Z\"\n}\n```\n\n### 400 Bad Request\nValidation error. The `details` field contains specific validation failures for each field.\n\n```json\n{\n  \"status\": 400,\n  \"error\": \"Validation Error\",\n  \"message\": \"Los datos de entrada no son válidos\",\n  \"errorCode\": \"VALIDATION_001\",\n  \"timestamp\": \"2024-01-15T10:30:00\",\n  \"details\": {\n    \"username\": \"size must be between 3 and 50\",\n    \"email\": \"must be a well-formed email address\"\n  }\n}\n```\n\n### 409 Conflict\nUser already exists with the same username or email.\n\n```json\n{\n  \"status\": 409,\n  \"error\": \"Conflict\",\n  \"message\": \"User with username 'johndoe' already exists\",\n  \"errorCode\": \"USER_006\",\n  \"timestamp\": \"2024-01-15T10:30:00\",\n  \"details\": null\n}\n```\n\n### 500 Internal Server Error\nUnexpected server error.\n\n## Example Test Cases\n\n### Valid Request\n```json\n{\n  \"username\": \"testuser123\",\n  \"email\": \"test@example.com\"\n}\n```\n\n### Invalid Username (too short)\n```json\n{\n  \"username\": \"ab\",\n  \"email\": \"test@example.com\"\n}\n```\n\n### Invalid Email Format\n```json\n{\n  \"username\": \"testuser\",\n  \"email\": \"not-an-email\"\n}\n```\n\n### Invalid Username Pattern (contains spaces)\n```json\n{\n  \"username\": \"test user\",\n  \"email\": \"test@example.com\"\n}\n```"
+          },
+          "response": [
+            {
+              "name": "201 Created - Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"johndoe\",\n  \"email\": \"john@example.com\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/{{apiVersion}}/users",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "{{apiVersion}}", "users"]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"username\": \"johndoe\",\n  \"email\": \"john@example.com\",\n  \"enabled\": true,\n  \"createdAt\": \"2024-01-15T10:30:00.123Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request - Validation Error",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"ab\",\n  \"email\": \"not-an-email\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/{{apiVersion}}/users",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "{{apiVersion}}", "users"]
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": 400,\n  \"error\": \"Validation Error\",\n  \"message\": \"Los datos de entrada no son válidos\",\n  \"errorCode\": \"VALIDATION_001\",\n  \"timestamp\": \"2024-01-15T10:30:00\",\n  \"details\": {\n    \"username\": \"size must be between 3 and 50\",\n    \"email\": \"must be a well-formed email address\"\n  }\n}"
+            },
+            {
+              "name": "409 Conflict - User Already Exists",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"johndoe\",\n  \"email\": \"john@example.com\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/{{apiVersion}}/users",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "{{apiVersion}}", "users"]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": 409,\n  \"error\": \"Conflict\",\n  \"message\": \"User with username 'johndoe' already exists\",\n  \"errorCode\": \"USER_006\",\n  \"timestamp\": \"2024-01-15T10:30:00\",\n  \"details\": null\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get User by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Test status code",
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "// Test response structure",
+                  "pm.test(\"Response has required fields\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('id');",
+                  "    pm.expect(jsonData).to.have.property('username');",
+                  "    pm.expect(jsonData).to.have.property('email');",
+                  "    pm.expect(jsonData).to.have.property('enabled');",
+                  "    pm.expect(jsonData).to.have.property('createdAt');",
+                  "});",
+                  "",
+                  "// Test UUID format",
+                  "pm.test(\"ID is valid UUID\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "    pm.expect(jsonData.id).to.match(uuidRegex);",
+                  "});",
+                  "",
+                  "// Test email format",
+                  "pm.test(\"Email is valid format\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;",
+                  "    pm.expect(jsonData.email).to.match(emailRegex);",
+                  "});",
+                  "",
+                  "// Test enabled is boolean",
+                  "pm.test(\"Enabled is boolean\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.enabled).to.be.a('boolean');",
+                  "});",
+                  "",
+                  "// Test timestamp format",
+                  "pm.test(\"CreatedAt is valid ISO 8601 timestamp\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.createdAt).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}/);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/{{apiVersion}}/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "{{apiVersion}}", "users", "{{userId}}"]
+            },
+            "description": "Retrieves a user by their unique identifier (UUID).\n\n## CQRS Pattern\nThis is a **Query** operation (Read side of CQRS).\n\n## Path Parameters\n- `id` (UUID, required): User unique identifier\n  - Format: UUID v4\n  - Example: `550e8400-e29b-41d4-a716-446655440000`\n\n## Expected Responses\n\n### 200 OK\nUser found successfully. Returns the complete user object.\n\n```json\n{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"username\": \"johndoe\",\n  \"email\": \"john@example.com\",\n  \"enabled\": true,\n  \"createdAt\": \"2024-01-15T10:30:00.123Z\"\n}\n```\n\n### 404 Not Found\nUser with the specified ID does not exist.\n\n```json\n{\n  \"status\": 404,\n  \"error\": \"Not Found\",\n  \"message\": \"User with ID '550e8400-e29b-41d4-a716-446655440000' not found\",\n  \"errorCode\": \"USER_404\",\n  \"timestamp\": \"2024-01-15T10:30:00\",\n  \"details\": null\n}\n```\n\n### 500 Internal Server Error\nUnexpected server error.\n\n## Usage Flow\n1. First, create a user using the \"Create User\" endpoint\n2. Copy the returned `id` from the response\n3. Use that `id` in this request's path parameter\n\n**Note**: If you run the \"Create User\" request with tests enabled, the `userId` environment variable will be automatically set and available for this request.\n\n## Response Fields\n\n- **id** (string): Unique identifier (UUID v4 format)\n- **username** (string): User's username (3-50 characters)\n- **email** (string): User's email address (valid email format)\n- **enabled** (boolean): Account status (true = active, false = disabled)\n- **createdAt** (string): Account creation timestamp (ISO 8601 UTC format)"
+          },
+          "response": [
+            {
+              "name": "200 OK - User Found",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/{{apiVersion}}/users/{{userId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "{{apiVersion}}", "users", "{{userId}}"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"username\": \"johndoe\",\n  \"email\": \"john@example.com\",\n  \"enabled\": true,\n  \"createdAt\": \"2024-01-15T10:30:00.123Z\"\n}"
+            },
+            {
+              "name": "404 Not Found - User Not Found",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/{{apiVersion}}/users/550e8400-e29b-41d4-a716-446655440099",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "{{apiVersion}}", "users", "550e8400-e29b-41d4-a716-446655440099"]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": 404,\n  \"error\": \"Not Found\",\n  \"message\": \"User with ID '550e8400-e29b-41d4-a716-446655440099' not found\",\n  \"errorCode\": \"USER_404\",\n  \"timestamp\": \"2024-01-15T10:30:00\",\n  \"details\": null\n}"
+            }
+          ]
+        }
+      ],
+      "description": "User management endpoints following CQRS pattern.\n\n## Commands (Write Operations)\n- Create User: Creates a new user in the system\n\n## Queries (Read Operations)\n- Get User by ID: Retrieves user information by unique identifier\n\n## Domain Model\nThe User entity represents a user in the system with the following properties:\n- **id**: Unique identifier (UUID)\n- **username**: Unique username (3-50 characters, alphanumeric with underscore/hyphen)\n- **email**: Unique email address (valid email format)\n- **enabled**: Account status (boolean)\n- **createdAt**: Account creation timestamp (ISO 8601 UTC)\n\n## Business Rules\n1. Username must be unique across all users\n2. Email must be unique across all users\n3. Username can only contain alphanumeric characters, underscores, and hyphens\n4. New users are enabled by default\n5. Timestamps are stored in UTC"
+    },
+    {
+      "name": "Monitoring",
+      "item": [
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Test status code",
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "// Test overall health status",
+                  "pm.test(\"Overall status is UP\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"UP\");",
+                  "});",
+                  "",
+                  "// Test components exist",
+                  "pm.test(\"Response has components\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('components');",
+                  "    pm.expect(jsonData.components).to.be.an('object');",
+                  "});",
+                  "",
+                  "// Test database health",
+                  "pm.test(\"Database is UP\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.components.db.status).to.eql(\"UP\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "health"]
+            },
+            "description": "Returns the application health status using Spring Boot Actuator.\n\n## Purpose\nUsed for monitoring and orchestration to verify the application is running correctly and all dependencies are healthy.\n\n## Health Indicators\n\n### Database (db)\nChecks PostgreSQL database connectivity.\n- **Status UP**: Database connection is working\n- **Status DOWN**: Cannot connect to database\n\n### Disk Space (diskSpace)\nChecks available disk space.\n- **Status UP**: Sufficient disk space available\n- **Status DOWN**: Disk space below threshold\n\n### Ping\nBasic application responsiveness check.\n- **Status UP**: Application is responding\n\n## Status Values\n- **UP**: Component is working correctly\n- **DOWN**: Component has failed\n- **OUT_OF_SERVICE**: Component is temporarily unavailable\n- **UNKNOWN**: Component state cannot be determined\n\n## Expected Response\n```json\n{\n  \"status\": \"UP\",\n  \"components\": {\n    \"db\": {\n      \"status\": \"UP\",\n      \"details\": {\n        \"database\": \"PostgreSQL\",\n        \"validationQuery\": \"isValid()\"\n      }\n    },\n    \"diskSpace\": {\n      \"status\": \"UP\",\n      \"details\": {\n        \"total\": 500000000000,\n        \"free\": 250000000000,\n        \"threshold\": 10485760\n      }\n    },\n    \"ping\": {\n      \"status\": \"UP\"\n    }\n  }\n}\n```\n\n## Use Cases\n- **Kubernetes**: Liveness and readiness probes\n- **Load Balancers**: Health checks to route traffic\n- **Monitoring Dashboards**: Display application status\n- **Automated Alerts**: Trigger alerts when components fail\n- **CI/CD Pipelines**: Verify deployment success\n\n## Response Time\nThis endpoint should respond quickly (< 1 second) for effective health checking."
+          },
+          "response": [
+            {
+              "name": "200 OK - All Components UP",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/actuator/health",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["actuator", "health"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": \"UP\",\n  \"components\": {\n    \"db\": {\n      \"status\": \"UP\",\n      \"details\": {\n        \"database\": \"PostgreSQL\",\n        \"validationQuery\": \"isValid()\"\n      }\n    },\n    \"diskSpace\": {\n      \"status\": \"UP\",\n      \"details\": {\n        \"total\": 500000000000,\n        \"free\": 250000000000,\n        \"threshold\": 10485760\n      }\n    },\n    \"ping\": {\n      \"status\": \"UP\"\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Info",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Test status code",
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "// Test app info exists",
+                  "pm.test(\"Response has app information\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('app');",
+                  "});",
+                  "",
+                  "// Test app name",
+                  "pm.test(\"App has name\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.app.name).to.be.a('string');",
+                  "    pm.expect(jsonData.app.name).to.not.be.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/info",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "info"]
+            },
+            "description": "Returns general information about the application using Spring Boot Actuator.\n\n## Information Provided\n- **Application Name**: Identifier for the application\n- **Description**: Brief description of the application purpose\n- **Version**: Current application version (follows semantic versioning)\n\n## Expected Response\n```json\n{\n  \"app\": {\n    \"name\": \"hexarch\",\n    \"description\": \"Demo project for Spring Boot with Hexagonal Architecture\",\n    \"version\": \"0.0.1-SNAPSHOT\"\n  }\n}\n```\n\n## Use Cases\n- **Version Verification**: Check which version is deployed in each environment\n- **Monitoring Dashboards**: Display application metadata\n- **Support**: Provide version information for troubleshooting\n- **Documentation**: Auto-generate API documentation with version info\n- **CI/CD**: Verify correct version after deployment\n\n## Configuration\nThe info is configured in `application.yml` under the `info` section:\n```yaml\ninfo:\n  app:\n    name: hexarch\n    description: Demo project for Spring Boot with Hexagonal Architecture\n    version: @project.version@\n```\n\nThe `@project.version@` placeholder is replaced by Maven during build."
+          },
+          "response": [
+            {
+              "name": "200 OK - Application Info",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/actuator/info",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["actuator", "info"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"app\": {\n    \"name\": \"hexarch\",\n    \"description\": \"Demo project for Spring Boot with Hexagonal Architecture\",\n    \"version\": \"0.0.1-SNAPSHOT\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Metrics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Test status code",
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "// Test names array exists",
+                  "pm.test(\"Response has names array\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('names');",
+                  "    pm.expect(jsonData.names).to.be.an('array');",
+                  "});",
+                  "",
+                  "// Test has metrics",
+                  "pm.test(\"Has at least one metric\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.names.length).to.be.greaterThan(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/metrics",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "metrics"]
+            },
+            "description": "Returns a list of available application metrics using Spring Boot Actuator.\n\n## Available Metric Categories\n\n### JVM Metrics\n- **jvm.memory.used**: Memory usage\n- **jvm.memory.max**: Maximum memory\n- **jvm.gc.pause**: Garbage collection pause times\n- **jvm.threads.live**: Live thread count\n- **jvm.classes.loaded**: Loaded class count\n\n### System Metrics\n- **system.cpu.usage**: System CPU usage\n- **system.cpu.count**: Number of CPUs\n- **process.cpu.usage**: Process CPU usage\n- **process.uptime**: Application uptime\n\n### HTTP Metrics\n- **http.server.requests**: HTTP request counts and durations\n- Response time percentiles\n- Request counts by status code\n\n### Database Metrics\n- **jdbc.connections.active**: Active JDBC connections\n- **jdbc.connections.idle**: Idle JDBC connections\n- **hikaricp.connections.min**: Minimum pool size\n- **hikaricp.connections.max**: Maximum pool size\n\n### Tomcat Metrics\n- **tomcat.sessions.active.current**: Active HTTP sessions\n- **tomcat.threads.busy**: Busy threads\n- **tomcat.threads.current**: Current threads\n\n## Expected Response\n```json\n{\n  \"names\": [\n    \"jvm.memory.used\",\n    \"jvm.gc.pause\",\n    \"http.server.requests\",\n    \"system.cpu.usage\",\n    \"jdbc.connections.active\",\n    \"hikaricp.connections.idle\",\n    \"tomcat.sessions.active.current\"\n  ]\n}\n```\n\n## Getting Specific Metric Details\nTo get details of a specific metric, call:\n```\nGET {{baseUrl}}/actuator/metrics/{metric.name}\n```\n\nExample:\n```\nGET {{baseUrl}}/actuator/metrics/jvm.memory.used\n```\n\nResponse:\n```json\n{\n  \"name\": \"jvm.memory.used\",\n  \"description\": \"The amount of used memory\",\n  \"baseUnit\": \"bytes\",\n  \"measurements\": [\n    {\n      \"statistic\": \"VALUE\",\n      \"value\": 123456789\n    }\n  ],\n  \"availableTags\": [\n    {\n      \"tag\": \"area\",\n      \"values\": [\"heap\", \"nonheap\"]\n    },\n    {\n      \"tag\": \"id\",\n      \"values\": [\"G1 Eden Space\", \"G1 Old Gen\"]\n    }\n  ]\n}\n```\n\n## Use Cases\n- **Performance Monitoring**: Track application performance over time\n- **Resource Usage**: Monitor memory, CPU, and connection pool usage\n- **Capacity Planning**: Analyze trends to plan infrastructure\n- **Troubleshooting**: Identify performance bottlenecks\n- **SLA Monitoring**: Track response times and error rates\n- **Integration**: Export to monitoring systems (Prometheus, Grafana, etc.)"
+          },
+          "response": [
+            {
+              "name": "200 OK - Metrics List",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/actuator/metrics",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["actuator", "metrics"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"names\": [\n    \"jvm.memory.used\",\n    \"jvm.memory.max\",\n    \"jvm.gc.pause\",\n    \"jvm.threads.live\",\n    \"system.cpu.usage\",\n    \"system.cpu.count\",\n    \"process.uptime\",\n    \"http.server.requests\",\n    \"jdbc.connections.active\",\n    \"hikaricp.connections.idle\"\n  ]\n}"
+            }
+          ]
+        }
+      ],
+      "description": "Spring Boot Actuator endpoints for application monitoring and management.\n\n## Overview\nActuator endpoints provide production-ready features for monitoring and managing the application. These endpoints expose operational information about the running application.\n\n## Available Endpoints\n\n### Health Check\nVerifies application health and dependency status (database, disk space, etc.).\n\n### Info\nProvides application metadata (name, version, description).\n\n### Metrics\nExposes application metrics (JVM, HTTP, database, system metrics).\n\n## Security\nIn production environments, these endpoints should be:\n- Protected with authentication\n- Exposed on a different port (management port)\n- Accessible only from internal networks\n- Monitored for unauthorized access\n\n## Integration Examples\n\n### Kubernetes Health Probes\n```yaml\nlivenessProbe:\n  httpGet:\n    path: /actuator/health\n    port: 8080\n  initialDelaySeconds: 30\n  periodSeconds: 10\n\nreadinessProbe:\n  httpGet:\n    path: /actuator/health\n    port: 8080\n  initialDelaySeconds: 5\n  periodSeconds: 5\n```\n\n### Prometheus Metrics (if enabled)\n```yaml\nmanagement:\n  endpoints:\n    web:\n      exposure:\n        include: health,info,metrics,prometheus\n  metrics:\n    export:\n      prometheus:\n        enabled: true\n```\n\n## Best Practices\n1. Monitor health endpoint continuously\n2. Set up alerts for DOWN status\n3. Track key metrics over time\n4. Use metrics for capacity planning\n5. Secure endpoints in production\n6. Export metrics to monitoring systems"
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "apiVersion",
+      "value": "v1",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "550e8400-e29b-41d4-a716-446655440000",
+      "type": "string"
+    }
+  ]
+}

@@ -226,7 +226,7 @@ public class UserController {
 ### ❌ Escenario 3: Equipo Sin Experiencia
 
 **Señales:**
-- Equipo de **juniors** sin mentor senior
+- Equipo sin experiencia en arquitectura hexagonal y sin mentoría disponible
 - Primera vez usando DDD / Hexagonal
 - Deadline ajustado
 - Sin tiempo para aprendizaje

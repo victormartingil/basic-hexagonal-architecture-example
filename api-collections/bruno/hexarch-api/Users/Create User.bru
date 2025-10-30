@@ -1,0 +1,114 @@
+meta {
+  name: Create User
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/users
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "username": "johndoe",
+    "email": "john@example.com"
+  }
+}
+
+docs {
+  # Create User
+
+  Creates a new user with the provided username and email.
+
+  ## CQRS Pattern
+  This is a **Command** operation (Write side of CQRS).
+
+  ## Business Rules
+  - Username must be unique (3-50 characters, alphanumeric, underscore, and hyphen only)
+  - Email must be unique and valid
+
+  ## Expected Responses
+
+  ### 201 Created
+  User created successfully. Returns the user object with generated ID.
+
+  ### 400 Bad Request
+  Validation error. Check the `details` field for specific validation failures.
+
+  ### 409 Conflict
+  User already exists with the same username or email.
+
+  ### 500 Internal Server Error
+  Unexpected server error.
+
+  ## Example Valid Request
+  ```json
+  {
+    "username": "testuser123",
+    "email": "test@example.com"
+  }
+  ```
+
+  ## Example Invalid Requests
+
+  ### Short username
+  ```json
+  {
+    "username": "ab",
+    "email": "test@example.com"
+  }
+  ```
+
+  ### Invalid email
+  ```json
+  {
+    "username": "testuser",
+    "email": "not-an-email"
+  }
+  ```
+
+  ### Invalid username pattern
+  ```json
+  {
+    "username": "test user@",
+    "email": "test@example.com"
+  }
+  ```
+}
+
+tests {
+  test("Status code should be 201", function() {
+    expect(res.getStatus()).to.equal(201);
+  });
+
+  test("Response should have user ID", function() {
+    expect(res.getBody().id).to.be.a('string');
+  });
+
+  test("Response should match request data", function() {
+    const body = res.getBody();
+    expect(body.username).to.equal(req.getBody().username);
+    expect(body.email).to.equal(req.getBody().email);
+  });
+
+  test("User should be enabled by default", function() {
+    expect(res.getBody().enabled).to.equal(true);
+  });
+
+  test("Response should have createdAt timestamp", function() {
+    expect(res.getBody().createdAt).to.be.a('string');
+  });
+}
+
+script:post-response {
+  // Save userId for subsequent requests
+  if (res.getStatus() === 201) {
+    bru.setEnvVar("userId", res.getBody().id);
+  }
+}

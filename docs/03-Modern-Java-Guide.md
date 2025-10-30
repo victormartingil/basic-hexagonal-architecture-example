@@ -1,4 +1,4 @@
-# Guía de Java Moderno para Juniors
+# Guía de Java Moderno
 
 ## 📚 Índice
 

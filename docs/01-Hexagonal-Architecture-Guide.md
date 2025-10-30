@@ -1,4 +1,4 @@
-# Guía de Arquitectura Hexagonal para Juniors
+# Guía de Arquitectura Hexagonal
 
 ## 📚 Índice
 

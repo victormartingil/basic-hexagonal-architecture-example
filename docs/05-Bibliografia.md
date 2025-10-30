@@ -626,7 +626,7 @@ Estos son los **4 libros imprescindibles** que todo desarrollador debería leer,
 
 2. **MoureDev** - [https://www.youtube.com/@mouredev](https://www.youtube.com/@mouredev)
    - Clean Code, buenas prácticas
-   - Orientado a juniors
+   - Explicación clara y accesible
 
 3. **Gentleman Programming** - [https://www.youtube.com/@GentlemanProgramming](https://www.youtube.com/@GentlemanProgramming)
    - Spring Boot, arquitecturas
@@ -648,7 +648,7 @@ Estos son los **4 libros imprescindibles** que todo desarrollador debería leer,
 
 ## Ruta de Aprendizaje Recomendada
 
-### 🎯 Para Juniors (0-2 años de experiencia)
+### 🎯 Ruta de Aprendizaje Inicial
 
 **Mes 1-2: Fundamentos**
 1. Leer: **"Clean Code"** - Robert C. Martin
@@ -699,7 +699,7 @@ Estos son los **4 libros imprescindibles** que todo desarrollador debería leer,
 2. Leer: **"Software Architecture: The Hard Parts"** - Neal Ford et al.
 3. Leer: **"Building Microservices"** - Sam Newman
 4. Estudiar: Event Sourcing, CQRS, Saga Pattern
-5. Contribuir: Escribir artículos, dar charlas, mentorear juniors
+5. Contribuir: Escribir artículos, dar charlas, compartir conocimiento con el equipo
 
 **Práctica:**
 - Diseñar arquitectura de sistemas complejos

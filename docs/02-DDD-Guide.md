@@ -1,4 +1,4 @@
-# Guía de Domain-Driven Design (DDD) para Juniors
+# Guía de Domain-Driven Design (DDD)
 
 ## 📚 Índice
 

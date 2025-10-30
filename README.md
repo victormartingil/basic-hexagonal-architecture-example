@@ -9,7 +9,7 @@
 
 Proyecto de ejemplo que implementa **Arquitectura Hexagonal** (Ports & Adapters) con **CQRS** (Command Query Responsibility Segregation), demostrando flujos completos de **CreateUser** (Command) y **GetUser** (Query).
 
-Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desarrolladores junior que quieran entender:
+Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desarrolladores que quieran entender:
 - Arquitectura Hexagonal (Ports & Adapters)
 - Domain-Driven Design (DDD)
 - CQRS (separación de comandos y consultas)
@@ -32,7 +32,7 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
 - **🐘 PostgreSQL + Flyway**: Migraciones de BD automáticas
 - **🐳 Testcontainers**: Integration tests con PostgreSQL real
 
-## 📖 Guías Completas para Juniors
+## 📖 Guías Completas
 
 **IMPORTANTE:** Lee estas guías antes de explorar el código:
 
@@ -65,7 +65,7 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
    - Cuándo SÍ usar esta arquitectura
    - Cuándo NO usar esta arquitectura
    - Comparación con otras arquitecturas (Layered, Clean, Microservicios)
-   - Respuestas a preguntas frecuentes de juniors
+   - Respuestas a preguntas frecuentes
    - Proceso de decisión (checklist)
 
 5. **[05-Bibliografia.md](docs/05-Bibliografia.md)** - Libros y Recursos Recomendados
@@ -317,6 +317,56 @@ curl -X GET http://localhost:8080/api/v1/users/550e8400-e29b-41d4-a716-446655440
   "createdAt": "2024-01-15T10:30:00.123Z"
 }
 ```
+
+#### Opción C: Bruno / Postman Collections
+
+Para una experiencia profesional de testing, importa las colecciones preconfigurables:
+
+```
+📁 api-collections/
+├── bruno/hexarch-api/      # Colección de Bruno (Git-friendly, open source)
+│   ├── Users/               # Endpoints de usuarios
+│   ├── Monitoring/          # Endpoints de actuator
+│   └── environments/        # Entornos (local, production)
+├── postman/                 # Colección de Postman
+│   ├── hexarch-api-collection.json
+│   └── hexarch-environments.json
+├── README.md                # 📖 Documentación completa + Quick Start
+└── TESTING_GUIDE.md         # 📚 Guía completa de testing
+
+Ver: api-collections/README.md
+```
+
+**Características:**
+- ✅ Todos los endpoints documentados con ejemplos
+- ✅ Tests automáticos incluidos y explicados
+- ✅ Variables de entorno que se actualizan automáticamente
+- ✅ Quick Start de 5 minutos integrado
+- ✅ Guía completa de testing desde cero
+- ✅ Ejemplos de cURL incluidos
+- ✅ Listo para importar y usar
+
+**Quick Start:**
+```bash
+# Bruno (Recomendado)
+1. Descargar: https://www.usebruno.com/
+2. Open Collection → api-collections/bruno/hexarch-api
+3. Elegir entorno "local"
+4. Ejecutar "Create User" → userId se guarda automáticamente
+
+# Postman
+1. Import → api-collections/postman/hexarch-api-collection.json
+2. Import → api-collections/postman/hexarch-environments.json
+3. Elegir entorno "Local"
+4. Ejecutar "Create User"
+```
+
+**📚 Guías disponibles:**
+- **[README.md](api-collections/README.md)** - Quick Start + Endpoints + Ejemplos de cURL
+- **[TESTING_GUIDE.md](api-collections/TESTING_GUIDE.md)** - Guía completa de testing desde cero
+  - ⭐ Incluye "Acciones Principales": 11 recetas para setear variables, acceder a datos, etc.
+  - Diferencia entre tests y scripts
+  - Mejores prácticas profesionales
 
 ---
 
@@ -635,7 +685,7 @@ Ver **[`docs/06-Code-Quality-JaCoCo-SonarQube.md`](docs/06-Code-Quality-JaCoCo-S
 
 ---
 
-## 📖 Conceptos Clave para Juniors
+## 📖 Conceptos Clave
 
 ### 1. Domain Layer (Dominio)
 

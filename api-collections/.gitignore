@@ -1,0 +1,23 @@
+# Bruno runtime files
+.bruno/
+
+# Postman runtime files
+*.postman_environment.json.backup
+
+# Test outputs
+test-results/
+newman-results/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log

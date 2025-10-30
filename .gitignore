@@ -54,3 +54,6 @@ jacoco.xml
 *~
 *.swp
 *.swo
+
+### Claude ###
+.claude/

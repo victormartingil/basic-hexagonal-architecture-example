@@ -1,0 +1,52 @@
+meta {
+  name: Info
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/actuator/info
+  body: none
+  auth: none
+}
+
+docs {
+  # Application Info
+
+  Returns general information about the application using Spring Boot Actuator.
+
+  ## Information Provided
+  - Application name
+  - Application description
+  - Application version
+
+  ## Expected Response
+  ```json
+  {
+    "app": {
+      "name": "hexarch",
+      "description": "Demo project for Spring Boot with Hexagonal Architecture",
+      "version": "0.0.1-SNAPSHOT"
+    }
+  }
+  ```
+
+  ## Use Cases
+  - Display application version in monitoring dashboards
+  - Verify deployed version in different environments
+  - Documentation and support purposes
+}
+
+tests {
+  test("Status code should be 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Should have app information", function() {
+    expect(res.getBody()).to.have.property('app');
+  });
+
+  test("Should have app name", function() {
+    expect(res.getBody().app.name).to.be.a('string');
+  });
+}

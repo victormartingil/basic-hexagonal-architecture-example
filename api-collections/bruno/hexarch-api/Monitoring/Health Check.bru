@@ -1,0 +1,82 @@
+meta {
+  name: Health Check
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/actuator/health
+  body: none
+  auth: none
+}
+
+docs {
+  # Health Check
+
+  Returns the application health status using Spring Boot Actuator.
+
+  ## Purpose
+  Used for monitoring and orchestration to verify the application is running correctly.
+
+  ## Health Indicators
+  - **db**: PostgreSQL database connectivity
+  - **diskSpace**: Available disk space
+  - **ping**: Basic application responsiveness
+
+  ## Expected Response
+  ```json
+  {
+    "status": "UP",
+    "components": {
+      "db": {
+        "status": "UP",
+        "details": {
+          "database": "PostgreSQL",
+          "validationQuery": "isValid()"
+        }
+      },
+      "diskSpace": {
+        "status": "UP",
+        "details": {
+          "total": 500000000000,
+          "free": 250000000000,
+          "threshold": 10485760
+        }
+      },
+      "ping": {
+        "status": "UP"
+      }
+    }
+  }
+  ```
+
+  ## Status Values
+  - **UP**: Component is working correctly
+  - **DOWN**: Component has failed
+  - **OUT_OF_SERVICE**: Component is temporarily unavailable
+  - **UNKNOWN**: Component state cannot be determined
+
+  ## Use Cases
+  - Kubernetes liveness/readiness probes
+  - Load balancer health checks
+  - Monitoring dashboards
+  - Automated alerts
+}
+
+tests {
+  test("Status code should be 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Overall status should be UP", function() {
+    expect(res.getBody().status).to.equal("UP");
+  });
+
+  test("Database should be UP", function() {
+    expect(res.getBody().components.db.status).to.equal("UP");
+  });
+
+  test("Should have components", function() {
+    expect(res.getBody().components).to.be.an('object');
+  });
+}
