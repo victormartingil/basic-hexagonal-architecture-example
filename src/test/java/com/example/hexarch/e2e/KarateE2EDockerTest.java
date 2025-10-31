@@ -113,11 +113,18 @@ public class KarateE2EDockerTest {
         return Karate.run("user").relativeTo(getClass());
     }
 
-    /**
-     * Health check: Verifica que la app en Docker responde
+    /*
+     * OPCIONAL: Health Check para CI/CD
      *
-     * Útil para debugging en CI/CD.
-     * Descomentar si necesitas validar connectivity antes de ejecutar tests:
+     * Descomentar este método si Docker Compose tarda mucho en arrancar en tu entorno CI/CD.
+     * Por defecto NO es necesario porque docker-compose up -d --wait ya espera a que la app esté ready.
+     *
+     * Casos de uso:
+     * - CI/CD lento (GitHub Actions en runners compartidos)
+     * - docker-compose sin health checks configurados
+     * - Debugging de problemas de startup
+     *
+     * Para usar: Descomentar todo el bloque incluyendo el import de @BeforeAll
      */
     /*
     @BeforeAll
