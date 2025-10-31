@@ -437,9 +437,9 @@
 						<groupId>org.apache.maven.plugins</groupId>
 						<artifactId>maven-surefire-plugin</artifactId>
 						<configuration>
-							<!-- Incluye TODOS los tests cuando este perfil está activo -->
+							<!-- EXCLUIR tests E2E de Karate - estos van en e2e-tests profile -->
 							<excludes>
-								<exclude>none</exclude>
+								<exclude>**/Karate*Test.java</exclude>
 							</excludes>
 							<includes>
 								<include>**/*Test.java</include>

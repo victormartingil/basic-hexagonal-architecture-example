@@ -43,8 +43,9 @@ function fn() {
 
   // Configuración de timeouts
   // IMPORTANTE: En CI/CD los contenedores tardan más en responder
-  karate.configure('connectTimeout', 30000); // 30 segundos
-  karate.configure('readTimeout', 30000);    // 30 segundos
+  // GitHub Actions con recursos limitados necesita timeouts más largos
+  karate.configure('connectTimeout', 60000); // 60 segundos
+  karate.configure('readTimeout', 60000);    // 60 segundos
 
   // Log level (puede ser 'info', 'debug', 'warn', 'error')
   karate.configure('logPrettyRequest', true);
