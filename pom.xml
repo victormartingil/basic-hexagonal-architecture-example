@@ -307,7 +307,7 @@
 					</execution>
 				</executions>
 			</plugin>
-			<!-- Surefire Plugin: Excluye Integration Tests por defecto -->
+			<!-- Surefire Plugin: Excluye Integration Tests y E2E Tests por defecto -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
@@ -315,6 +315,8 @@
 					<excludes>
 						<!-- Excluye integration tests por defecto (requieren Docker) -->
 						<exclude>**/*IntegrationTest.java</exclude>
+						<!-- Excluye E2E tests por defecto (se ejecutan con profiles específicos) -->
+						<exclude>**/KarateE2E*Test.java</exclude>
 					</excludes>
 					<!-- Argumentos JVM para compatibilidad con Java 21 y GraalVM (Karate) -->
 					<argLine>

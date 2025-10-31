@@ -458,6 +458,108 @@ src/test/
 
 **⚠️ IMPORTANTE**: Los archivos `.feature` deben estar en `src/test/resources/`, no en `src/test/java/`.
 
+### 6.1.1. Los 3 Runners E2E: ¿Cuándo usar cada uno?
+
+Tenemos **3 archivos de test** que ejecutan los **mismos scenarios** (`.feature` files), pero de **formas diferentes**:
+
+#### 1️⃣ **KarateE2ETestcontainersTest** 🚀 (RECOMENDADO - HABILITADO)
+
+**Cuándo usar**: CI/CD diario, desarrollo rápido, Pull Requests
+
+**Cómo funciona**:
+```bash
+# Un solo comando lo hace todo
+./mvnw test -Pe2e-tests -Dkarate.env=local
+```
+
+- ✅ **@SpringBootTest** arranca la app en memoria (puerto aleatorio)
+- ✅ **Testcontainers** levanta PostgreSQL automáticamente
+- ✅ **Todo en un comando** (no requiere setup manual)
+- ✅ **Rápido**: ~5 minutos
+- ✅ **Auto-cleanup**: Contenedores se limpian solos
+- ❌ **NO valida**: Imagen Docker, Dockerfile, configuración del contenedor
+
+**Estado**: ✅ **HABILITADO** (sin @Disabled)
+
+---
+
+#### 2️⃣ **KarateE2EDockerTest** 🐳 (Validación Docker - HABILITADO)
+
+**Cuándo usar**: Pre-release, validación final, antes de deployar a producción
+
+**Cómo funciona**:
+```bash
+# 1. Build de la imagen Docker
+./mvnw clean package -DskipTests
+docker build -t hexarch:latest .
+
+# 2. Levantar stack completo
+docker-compose up -d
+
+# 3. Ejecutar E2E tests contra Docker
+./mvnw test -Pe2e-tests-docker -Dkarate.env=docker
+
+# 4. Cleanup
+docker-compose down
+```
+
+- ✅ **Docker Compose** arranca app desde imagen compilada
+- ✅ **Valida Dockerfile** y proceso de build completo
+- ✅ **Valida configuración** del contenedor (permisos, variables, networking)
+- ✅ **Entorno idéntico** a producción
+- ❌ **Lento**: ~10-12 minutos
+- ❌ **Requiere setup manual** (docker-compose up)
+
+**Estado**: ✅ **HABILITADO** (sin @Disabled) - Se ejecuta con profile específico
+
+**⚠️ IMPORTANTE**: Este runner NO es redundante con Testcontainers. Valida cosas que Testcontainers no puede validar (imagen Docker final).
+
+---
+
+#### 3️⃣ **KarateE2ELocalTest** 💻 (Desarrollo manual - @Disabled)
+
+**Cuándo usar**: Debugging, desarrollo con hot-reload, ejecución manual
+
+**Cómo funciona**:
+```bash
+# Terminal 1: Infraestructura
+docker-compose up -d
+
+# Terminal 2: Aplicación (con hot-reload)
+./mvnw spring-boot:run
+
+# Terminal 3: Tests (descomentar @Disabled primero)
+./mvnw test -Dtest=KarateE2ELocalTest -Dkarate.env=local
+```
+
+- ✅ **Debugging fácil** desde IDE
+- ✅ **Hot-reload** (cambios sin rebuild)
+- ✅ **Feedback rápido** en cambios de código
+- ❌ **Requiere 3 terminales** y setup manual
+- ❌ **Requiere quitar @Disabled** manualmente
+
+**Estado**: 🔴 **@Disabled** (ejecución manual solamente)
+
+---
+
+### 📊 Comparación de los 3 Runners
+
+| Aspecto | Testcontainers 🚀 | Docker Compose 🐳 | Local 💻 |
+|---------|-------------------|-------------------|----------|
+| **Setup** | Automático | Manual | Manual |
+| **Comandos** | 1 | 4 | 3 |
+| **Tiempo** | ~5 min | ~10 min | ~2 min |
+| **Valida Dockerfile** | ❌ No | ✅ Sí | ❌ No |
+| **Valida imagen Docker** | ❌ No | ✅ Sí | ❌ No |
+| **Hot-reload** | ❌ No | ❌ No | ✅ Sí |
+| **Debugging** | ⚠️ Normal | ⚠️ Difícil | ✅ Fácil |
+| **Para CI/CD** | ✅ Perfecto | ❌ Complejo | ❌ No |
+| **Para Pre-Release** | ⚠️ Insuficiente | ✅ Perfecto | ❌ No |
+| **Para Desarrollo** | ✅ Sí | ❌ No | ✅ Perfecto |
+| **Estado** | ✅ Habilitado | ✅ Habilitado | 🔴 @Disabled |
+
+**Conclusión**: Los 3 archivos ejecutan los **mismos tests** pero de **formas diferentes**, cada uno optimizado para un **caso de uso específico**. NO son redundantes, son complementarios.
+
 ### 6.2. karate-config.js
 
 Configuración global que se ejecuta antes de cada test:
