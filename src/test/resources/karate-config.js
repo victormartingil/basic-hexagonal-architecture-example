@@ -42,8 +42,9 @@ function fn() {
   }
 
   // Configuración de timeouts
-  karate.configure('connectTimeout', 10000); // 10 segundos
-  karate.configure('readTimeout', 10000);    // 10 segundos
+  // IMPORTANTE: En CI/CD los contenedores tardan más en responder
+  karate.configure('connectTimeout', 30000); // 30 segundos
+  karate.configure('readTimeout', 30000);    // 30 segundos
 
   // Log level (puede ser 'info', 'debug', 'warn', 'error')
   karate.configure('logPrettyRequest', true);

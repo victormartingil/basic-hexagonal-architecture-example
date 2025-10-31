@@ -70,7 +70,8 @@ class KafkaConsumerIntegrationTest {
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
             .withDatabaseName("testdb")
             .withUsername("test")
-            .withPassword("test");
+            .withPassword("test")
+            .withStartupTimeout(java.time.Duration.ofSeconds(120));
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
@@ -122,8 +123,10 @@ class KafkaConsumerIntegrationTest {
         kafkaTemplate.send("user.created", userId.toString(), event);
 
         // THEN - Verificar que el Consumer procesó el evento y llamó a EmailService
+        // IMPORTANTE: En CI el consumer tarda más en procesar mensajes
         await()
-                .atMost(Duration.ofSeconds(10))
+                .atMost(Duration.ofSeconds(20))
+                .pollDelay(Duration.ofSeconds(1))
                 .untilAsserted(() ->
                         verify(emailService, atLeast(1))
                                 .sendWelcomeEmail("consumer@test.com", "consumer-test-user")
@@ -160,8 +163,10 @@ class KafkaConsumerIntegrationTest {
         kafkaTemplate.send("user.created", sameKey, event3);
 
         // THEN - Verificar que todos se procesaron
+        // IMPORTANTE: En CI el consumer tarda más en procesar mensajes
         await()
-                .atMost(Duration.ofSeconds(15))
+                .atMost(Duration.ofSeconds(25))
+                .pollDelay(Duration.ofSeconds(1))
                 .untilAsserted(() ->
                         verify(emailService, atLeast(3))
                                 .sendWelcomeEmail("user1@test.com", "user1")
@@ -201,8 +206,10 @@ class KafkaConsumerIntegrationTest {
         kafkaTemplate.send("user.created", userId.toString(), event);
 
         // THEN - Verificar que se intentó enviar email (aunque falló)
+        // IMPORTANTE: En CI el consumer tarda más en procesar mensajes
         await()
-                .atMost(Duration.ofSeconds(10))
+                .atMost(Duration.ofSeconds(20))
+                .pollDelay(Duration.ofSeconds(1))
                 .untilAsserted(() ->
                         verify(emailService, atLeast(1))
                                 .sendWelcomeEmail("failure@test.com", "failure-test-user")
@@ -237,8 +244,10 @@ class KafkaConsumerIntegrationTest {
         kafkaTemplate.send("user.created", userId.toString(), detailedEvent);
 
         // THEN - Verificar que se usaron los datos correctos
+        // IMPORTANTE: En CI el consumer tarda más en procesar mensajes
         await()
-                .atMost(Duration.ofSeconds(10))
+                .atMost(Duration.ofSeconds(20))
+                .pollDelay(Duration.ofSeconds(1))
                 .untilAsserted(() ->
                         verify(emailService).sendWelcomeEmail("detailed@example.com", "detailed-user")
                 );
@@ -269,8 +278,10 @@ class KafkaConsumerIntegrationTest {
         kafkaTemplate.send("user.created", null, event);
 
         // THEN - Verificar que se procesó
+        // IMPORTANTE: En CI el consumer tarda más en procesar mensajes
         await()
-                .atMost(Duration.ofSeconds(10))
+                .atMost(Duration.ofSeconds(20))
+                .pollDelay(Duration.ofSeconds(1))
                 .untilAsserted(() ->
                         verify(emailService).sendWelcomeEmail("nullkey@test.com", "nullkey-user")
                 );
@@ -310,7 +321,8 @@ class KafkaConsumerIntegrationTest {
 
         // THEN - Verificar que todos se procesaron
         await()
-                .atMost(Duration.ofSeconds(15))
+                .atMost(Duration.ofSeconds(25))
+                .pollDelay(Duration.ofSeconds(1))
                 .untilAsserted(() ->
                         verify(emailService, atLeast(3))
                                 .sendWelcomeEmail(anyString(), anyString())

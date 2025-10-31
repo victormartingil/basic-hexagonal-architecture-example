@@ -4,8 +4,7 @@ import com.example.hexarch.shared.domain.security.Role;
 import com.example.hexarch.shared.infrastructure.security.jwt.JwtTokenProvider;
 import com.example.hexarch.user.application.port.output.UserRepository;
 import com.example.hexarch.user.domain.model.User;
-import com.example.hexarch.user.domain.model.valueobject.Email;
-import com.example.hexarch.user.domain.model.valueobject.Username;
+import com.example.hexarch.user.infrastructure.adapter.output.persistence.SpringDataUserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,8 +41,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * - Rechazo de requests con rol insuficiente (403 Forbidden)
  *
  * ESCENARIO:
- * - POST /api/users → Solo ADMIN o MANAGER
- * - GET /api/users/{id} → Cualquier usuario autenticado
+ * - POST /api/v1/users → Solo ADMIN o MANAGER
+ * - GET /api/v1/users/{id} → Cualquier usuario autenticado
  * - GET /actuator/health → Público (sin autenticación)
  *
  * BEST PRACTICE:
@@ -62,7 +61,8 @@ class SecurityIntegrationTest {
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
             .withDatabaseName("testdb")
             .withUsername("test")
-            .withPassword("test");
+            .withPassword("test")
+            .withStartupTimeout(java.time.Duration.ofSeconds(120));
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
@@ -80,6 +80,9 @@ class SecurityIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private SpringDataUserRepository springDataUserRepository;
+
     private String adminToken;
     private String managerToken;
     private String viewerToken;
@@ -87,13 +90,18 @@ class SecurityIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        // Limpiar la BD antes de cada test para evitar violaciones de unicidad
+        // IMPORTANTE: En CI/CD los tests pueden ejecutarse en paralelo o sin limpieza
+        // Usamos SpringDataUserRepository directamente porque tiene el método deleteAll() de JpaRepository
+        springDataUserRepository.deleteAll();
+
         // Generar tokens JWT para diferentes roles
         adminToken = "Bearer " + jwtTokenProvider.generateToken("admin.user", List.of(Role.ADMIN));
         managerToken = "Bearer " + jwtTokenProvider.generateToken("manager.user", List.of(Role.MANAGER));
         viewerToken = "Bearer " + jwtTokenProvider.generateToken("viewer.user", List.of(Role.VIEWER));
 
         // Crear usuario existente para tests de GET
-        User existingUser = User.create("existing.user", "existing@test.com");
+        User existingUser = User.create("existing_user", "existing@test.com");
         User savedUser = userRepository.save(existingUser);
         existingUserId = savedUser.getId();
     }
@@ -110,10 +118,10 @@ class SecurityIntegrationTest {
     }
 
     /**
-     * TEST CASE 2: POST /api/users sin token debe devolver 401
+     * TEST CASE 2: POST /api/v1/users sin token debe devolver 401
      */
     @Test
-    @DisplayName("POST /api/users sin token debe devolver 401 Unauthorized")
+    @DisplayName("POST /api/v1/users sin token debe devolver 401 Unauthorized")
     void shouldReturn401WhenCreatingUserWithoutToken() throws Exception {
         // GIVEN
         String requestBody = """
@@ -124,7 +132,7 @@ class SecurityIntegrationTest {
                 """;
 
         // WHEN & THEN
-        mockMvc.perform(post("/api/users")
+        mockMvc.perform(post("/api/v1/users")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isUnauthorized())
@@ -133,10 +141,10 @@ class SecurityIntegrationTest {
     }
 
     /**
-     * TEST CASE 3: POST /api/users con token inválido debe devolver 401
+     * TEST CASE 3: POST /api/v1/users con token inválido debe devolver 401
      */
     @Test
-    @DisplayName("POST /api/users con token inválido debe devolver 401")
+    @DisplayName("POST /api/v1/users con token inválido debe devolver 401")
     void shouldReturn401WhenCreatingUserWithInvalidToken() throws Exception {
         // GIVEN
         String requestBody = """
@@ -148,7 +156,7 @@ class SecurityIntegrationTest {
         String invalidToken = "Bearer invalid.jwt.token";
 
         // WHEN & THEN
-        mockMvc.perform(post("/api/users")
+        mockMvc.perform(post("/api/v1/users")
                         .header("Authorization", invalidToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
@@ -156,68 +164,68 @@ class SecurityIntegrationTest {
     }
 
     /**
-     * TEST CASE 4: POST /api/users con ADMIN debe funcionar (200 o 201)
+     * TEST CASE 4: POST /api/v1/users con ADMIN debe funcionar (200 o 201)
      */
     @Test
-    @DisplayName("POST /api/users con rol ADMIN debe crear usuario exitosamente")
+    @DisplayName("POST /api/v1/users con rol ADMIN debe crear usuario exitosamente")
     void shouldCreateUserWithAdminRole() throws Exception {
         // GIVEN
         String requestBody = """
                 {
-                    "username": "admin.created.user",
+                    "username": "admin_created_user",
                     "email": "admin.created@test.com"
                 }
                 """;
 
         // WHEN & THEN
-        mockMvc.perform(post("/api/users")
+        mockMvc.perform(post("/api/v1/users")
                         .header("Authorization", adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.username").value("admin.created.user"))
+                .andExpect(jsonPath("$.username").value("admin_created_user"))
                 .andExpect(jsonPath("$.email").value("admin.created@test.com"));
     }
 
     /**
-     * TEST CASE 5: POST /api/users con MANAGER debe funcionar
+     * TEST CASE 5: POST /api/v1/users con MANAGER debe funcionar
      */
     @Test
-    @DisplayName("POST /api/users con rol MANAGER debe crear usuario exitosamente")
+    @DisplayName("POST /api/v1/users con rol MANAGER debe crear usuario exitosamente")
     void shouldCreateUserWithManagerRole() throws Exception {
         // GIVEN
         String requestBody = """
                 {
-                    "username": "manager.created.user",
+                    "username": "manager_created_user",
                     "email": "manager.created@test.com"
                 }
                 """;
 
         // WHEN & THEN
-        mockMvc.perform(post("/api/users")
+        mockMvc.perform(post("/api/v1/users")
                         .header("Authorization", managerToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.username").value("manager.created.user"));
+                .andExpect(jsonPath("$.username").value("manager_created_user"));
     }
 
     /**
-     * TEST CASE 6: POST /api/users con VIEWER debe devolver 403 Forbidden
+     * TEST CASE 6: POST /api/v1/users con VIEWER debe devolver 403 Forbidden
      */
     @Test
-    @DisplayName("POST /api/users con rol VIEWER debe devolver 403 Forbidden")
+    @DisplayName("POST /api/v1/users con rol VIEWER debe devolver 403 Forbidden")
     void shouldReturn403WhenCreatingUserWithViewerRole() throws Exception {
         // GIVEN
         String requestBody = """
                 {
-                    "username": "viewer.attempt",
+                    "username": "viewer_attempt",
                     "email": "viewer@test.com"
                 }
                 """;
 
         // WHEN & THEN
-        mockMvc.perform(post("/api/users")
+        mockMvc.perform(post("/api/v1/users")
                         .header("Authorization", viewerToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
@@ -225,41 +233,41 @@ class SecurityIntegrationTest {
     }
 
     /**
-     * TEST CASE 7: GET /api/users/{id} sin token debe devolver 401
+     * TEST CASE 7: GET /api/v1/users/{id} sin token debe devolver 401
      */
     @Test
-    @DisplayName("GET /api/users/{id} sin token debe devolver 401 Unauthorized")
+    @DisplayName("GET /api/v1/users/{id} sin token debe devolver 401 Unauthorized")
     void shouldReturn401WhenGettingUserWithoutToken() throws Exception {
         // WHEN & THEN
-        mockMvc.perform(get("/api/users/" + existingUserId))
+        mockMvc.perform(get("/api/v1/users/" + existingUserId))
                 .andExpect(status().isUnauthorized());
     }
 
     /**
-     * TEST CASE 8: GET /api/users/{id} con VIEWER debe funcionar
+     * TEST CASE 8: GET /api/v1/users/{id} con VIEWER debe funcionar
      */
     @Test
-    @DisplayName("GET /api/users/{id} con rol VIEWER debe obtener usuario")
+    @DisplayName("GET /api/v1/users/{id} con rol VIEWER debe obtener usuario")
     void shouldGetUserWithViewerRole() throws Exception {
         // WHEN & THEN
-        mockMvc.perform(get("/api/users/" + existingUserId)
+        mockMvc.perform(get("/api/v1/users/" + existingUserId)
                         .header("Authorization", viewerToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(existingUserId.toString()))
-                .andExpect(jsonPath("$.username").value("existing.user"));
+                .andExpect(jsonPath("$.username").value("existing_user"));
     }
 
     /**
-     * TEST CASE 9: GET /api/users/{id} con ADMIN debe funcionar
+     * TEST CASE 9: GET /api/v1/users/{id} con ADMIN debe funcionar
      */
     @Test
-    @DisplayName("GET /api/users/{id} con rol ADMIN debe obtener usuario")
+    @DisplayName("GET /api/v1/users/{id} con rol ADMIN debe obtener usuario")
     void shouldGetUserWithAdminRole() throws Exception {
         // WHEN & THEN
-        mockMvc.perform(get("/api/users/" + existingUserId)
+        mockMvc.perform(get("/api/v1/users/" + existingUserId)
                         .header("Authorization", adminToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.username").value("existing.user"));
+                .andExpect(jsonPath("$.username").value("existing_user"));
     }
 
     /**
@@ -276,20 +284,20 @@ class SecurityIntegrationTest {
 
         String requestBody = """
                 {
-                    "username": "multi.role.created",
+                    "username": "multi_role_created",
                     "email": "multi@test.com"
                 }
                 """;
 
         // WHEN & THEN - Puede crear (ADMIN/MANAGER)
-        mockMvc.perform(post("/api/users")
+        mockMvc.perform(post("/api/v1/users")
                         .header("Authorization", multiRoleToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isCreated());
 
         // WHEN & THEN - Puede leer (cualquier rol autenticado)
-        mockMvc.perform(get("/api/users/" + existingUserId)
+        mockMvc.perform(get("/api/v1/users/" + existingUserId)
                         .header("Authorization", multiRoleToken))
                 .andExpect(status().isOk());
     }

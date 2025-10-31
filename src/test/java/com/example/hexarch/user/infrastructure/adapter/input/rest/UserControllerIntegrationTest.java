@@ -20,10 +20,12 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -386,7 +388,9 @@ class UserControllerIntegrationTest {
         assertThat(retrievedUser.getUsername()).isEqualTo(createdUser.getUsername());
         assertThat(retrievedUser.getEmail()).isEqualTo(createdUser.getEmail());
         assertThat(retrievedUser.getEnabled()).isEqualTo(createdUser.getEnabled());
-        assertThat(retrievedUser.getCreatedAt()).isEqualTo(createdUser.getCreatedAt());
+        // Comparar timestamps con tolerancia de 1 segundo debido a pérdida de precisión en serialización JSON
+        assertThat(retrievedUser.getCreatedAt())
+                .isCloseTo(createdUser.getCreatedAt(), within(1, ChronoUnit.SECONDS));
     }
 
     /**

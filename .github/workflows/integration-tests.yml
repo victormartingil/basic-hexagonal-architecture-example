@@ -7,6 +7,18 @@ on:
   # Ejecutar en PRs hacia main
   pull_request:
     branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'pom.xml'
+      - '.github/workflows/integration-tests.yml'
+
+  # Ejecutar en push a main (después de merge)
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'pom.xml'
+      - '.github/workflows/integration-tests.yml'
 
   # Ejecutar semanalmente (cada lunes a las 3am)
   schedule:

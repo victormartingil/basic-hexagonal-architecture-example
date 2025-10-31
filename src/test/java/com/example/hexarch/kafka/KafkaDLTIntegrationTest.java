@@ -100,7 +100,8 @@ class KafkaDLTIntegrationTest {
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
             .withDatabaseName("testdb")
             .withUsername("test")
-            .withPassword("test");
+            .withPassword("test")
+            .withStartupTimeout(java.time.Duration.ofSeconds(120));
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {

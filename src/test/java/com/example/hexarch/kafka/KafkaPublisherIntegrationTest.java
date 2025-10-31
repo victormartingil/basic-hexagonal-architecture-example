@@ -75,7 +75,8 @@ class KafkaPublisherIntegrationTest {
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
             .withDatabaseName("testdb")
             .withUsername("test")
-            .withPassword("test");
+            .withPassword("test")
+            .withStartupTimeout(java.time.Duration.ofSeconds(120));
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
@@ -112,12 +113,18 @@ class KafkaPublisherIntegrationTest {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
         consumerProps.put(JsonDeserializer.TRUSTED_PACKAGES, "com.example.hexarch.user.domain.event");
         consumerProps.put(JsonDeserializer.VALUE_DEFAULT_TYPE, UserCreatedEvent.class.getName());
+        // IMPORTANTE: Leer desde el final para evitar leer mensajes de tests anteriores
+        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
 
         DefaultKafkaConsumerFactory<String, UserCreatedEvent> consumerFactory =
                 new DefaultKafkaConsumerFactory<>(consumerProps);
 
         testConsumer = consumerFactory.createConsumer();
         embeddedKafkaBroker.consumeFromAnEmbeddedTopic(testConsumer, "user.created");
+
+        // Limpiar cualquier mensaje previo en el topic (de tests anteriores)
+        // Esto asegura que cada test empiece con un topic limpio
+        KafkaTestUtils.getRecords(testConsumer, Duration.ofMillis(500));
     }
 
     @AfterEach

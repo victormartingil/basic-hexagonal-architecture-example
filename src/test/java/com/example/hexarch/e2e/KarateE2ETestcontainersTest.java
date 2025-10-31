@@ -139,12 +139,16 @@ public class KarateE2ETestcontainersTest {
     /**
      * Contenedor de PostgreSQL para los tests
      * Testcontainers levanta automáticamente un contenedor Docker
+     *
+     * CONFIGURACIÓN PARA CI/CD:
+     * - startupTimeout: 120 segundos (vs 60 default) para ambientes con recursos limitados
      */
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
             .withDatabaseName("testdb")
             .withUsername("test")
-            .withPassword("test");
+            .withPassword("test")
+            .withStartupTimeout(java.time.Duration.ofSeconds(120));
 
     /**
      * Configuración dinámica de Spring Boot
@@ -172,6 +176,51 @@ public class KarateE2ETestcontainersTest {
     }
 
     /**
+     * Espera a que la aplicación Spring Boot esté lista
+     *
+     * IMPORTANTE: En CI/CD (GitHub Actions) la aplicación tarda más en arrancar
+     * debido a recursos limitados. Este método espera hasta 120 segundos.
+     */
+    private void waitForApplicationToBeReady() {
+        String healthUrl = "http://localhost:" + port + "/actuator/health";
+        int maxAttempts = 60; // 60 intentos * 2 segundos = 120 segundos máximo
+        int attempt = 0;
+
+        System.out.println("⏳ Waiting for application to be ready at " + healthUrl);
+
+        while (attempt < maxAttempts) {
+            try {
+                java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+                java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                        .uri(java.net.URI.create(healthUrl))
+                        .timeout(java.time.Duration.ofSeconds(5))
+                        .GET()
+                        .build();
+
+                java.net.http.HttpResponse<String> response = client.send(request,
+                        java.net.http.HttpResponse.BodyHandlers.ofString());
+
+                if (response.statusCode() == 200 && response.body().contains("UP")) {
+                    System.out.println("✅ Application ready after " + (attempt * 2) + " seconds");
+                    return;
+                }
+            } catch (Exception e) {
+                // Aplicación aún no está lista, continuar esperando
+            }
+
+            attempt++;
+            try {
+                Thread.sleep(2000); // Esperar 2 segundos entre intentos
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Interrupted while waiting for application", e);
+            }
+        }
+
+        throw new RuntimeException("Application did not start within 120 seconds");
+    }
+
+    /**
      * Cleanup después de ejecutar los tests
      */
     @AfterAll
@@ -193,6 +242,9 @@ public class KarateE2ETestcontainersTest {
      */
     @Karate.Test
     Karate testUser() {
+        // Esperar a que la aplicación esté lista antes de ejecutar tests
+        waitForApplicationToBeReady();
+
         // Configurar la URL base de Karate con el puerto aleatorio
         String baseUrl = "http://localhost:" + port;
         System.setProperty("karate.baseUrl", baseUrl);

@@ -10,8 +10,8 @@ name: E2E Tests (Testcontainers + Docker Compose)
 #
 # TRIGGERS CONFIGURADOS:
 # ✅ Pull Requests a main (modo LOCAL)
+# ✅ Push a main (modo LOCAL) - después de merge
 # ✅ Manual desde GitHub UI (ambos modos)
-# ❌ Push a main (desactivado)
 # ❌ Scheduled (desactivado)
 #
 # ⚠️ IMPORTANTE - LÍMITES DE GITHUB ACTIONS:
@@ -70,13 +70,13 @@ on:
       - 'docker-compose.yml'
       - '.github/workflows/e2e-tests.yml'
 
-  # ❌ DESACTIVADO: Ejecutar en Push a Main
-  # [AUTO-MAIN] Descomenta las siguientes líneas para activar:
-  # push:
-  #   branches: [ main ]
-  #   paths:
-  #     - 'src/**'
-  #     - 'pom.xml'
+  # ✅ ACTIVADO: Ejecutar en Push a Main (después de merge)
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'pom.xml'
+      - '.github/workflows/e2e-tests.yml'
 
   # ❌ DESACTIVADO: Ejecutar semanalmente
   # [SCHEDULED] Descomenta las siguientes líneas para activar:
@@ -155,7 +155,7 @@ jobs:
         if: ${{ !inputs.skip_infra }}
         run: |
           echo "🚀 Starting infrastructure..."
-          docker-compose up -d
+          docker compose up -d
           echo "✅ Infrastructure started"
 
       - name: ⏳ Wait for services to be ready
@@ -231,7 +231,7 @@ jobs:
       - name: 🛑 Stop infrastructure
         if: always()
         run: |
-          docker-compose down -v
+          docker compose down -v
           docker system prune -f
 
       - name: 📝 Generate test summary
