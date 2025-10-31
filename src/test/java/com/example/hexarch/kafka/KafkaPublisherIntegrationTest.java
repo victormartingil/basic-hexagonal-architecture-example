@@ -14,10 +14,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.test.EmbeddedKafkaBroker;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -58,14 +60,29 @@ import static org.assertj.core.api.Assertions.assertThat;
  * - Notifications Service (otro) → tiene el Consumer → consume eventos
  * - NO están en el mismo proyecto/microservicio
  */
-@SpringBootTest
+@SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
+/**
+ * @DirtiesContext - IMPORTANTE para tests de Kafka
+ *
+ * Esta anotación indica a Spring que el contexto de aplicación debe recargarse
+ * después de ejecutar esta clase de test. Esto es CRÍTICO para tests de Kafka porque:
+ *
+ * 1. EVITA CONTAMINACIÓN: Sin @DirtiesContext, el EmbeddedKafkaBroker y los topics
+ *    se comparten entre clases de test, causando que mensajes de un test aparezcan en otro.
+ *
+ * 2. GARANTIZA AISLAMIENTO: Cada clase de test obtiene un broker Kafka limpio,
+ *    sin mensajes residuales ni offsets de tests anteriores.
+ *
+ * 3. PUERTOS DINÁMICOS: Permite que cada test use puertos dinámicos diferentes,
+ *    evitando conflictos cuando se ejecutan tests en paralelo o secuencialmente.
+ *
+ * TRADE-OFF: Recargar el contexto es costoso (~2-3 segundos por clase), pero es
+ * necesario para garantizar tests deterministas y sin flakiness.
+ */
+@DirtiesContext
 @EmbeddedKafka(
         partitions = 1,
-        topics = {"user.created", "user.created.dlt"},
-        brokerProperties = {
-                "listeners=PLAINTEXT://localhost:9093",
-                "port=9093"
-        }
+        topics = {"user.created", "user.created.dlt"}
 )
 @Testcontainers
 @DisplayName("Kafka Publisher Integration Tests - Producer Only")
@@ -84,9 +101,6 @@ class KafkaPublisherIntegrationTest {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
-
-        // Kafka - usar el broker embebido
-        registry.add("spring.kafka.bootstrap-servers", () -> "localhost:9093");
     }
 
     @Autowired
@@ -96,16 +110,34 @@ class KafkaPublisherIntegrationTest {
     @Autowired
     private KafkaUserEventPublisherAdapter publisher;
 
+    // ✅ KafkaTemplate - Para hacer flush() y asegurar que los mensajes lleguen
+    @Autowired
+    private KafkaTemplate<String, UserCreatedEvent> kafkaTemplate;
+
     // ✅ Test Consumer - Para verificar que el mensaje llegó a Kafka
     // NO es el Consumer de la aplicación (ese estaría en otro microservicio)
     private Consumer<String, UserCreatedEvent> testConsumer;
 
     @BeforeEach
     void setUp() {
-        // Configurar un TEST CONSUMER para verificar mensajes en Kafka
-        // Este consumer simula "leer directamente de Kafka" sin usar el Consumer de la aplicación
+        // No configurar consumer aquí - cada test creará el suyo con group ID único
+        // Esto evita problemas de offset entre tests
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (testConsumer != null) {
+            testConsumer.close();
+            testConsumer = null;
+        }
+    }
+
+    /**
+     * Helper: Crea un consumer de test con group ID único para evitar conflictos de offset
+     */
+    private Consumer<String, UserCreatedEvent> createTestConsumer(String testName) {
         Map<String, Object> consumerProps = KafkaTestUtils.consumerProps(
-                "test-publisher-group",
+                "test-" + testName + "-" + System.currentTimeMillis(),
                 "true",
                 embeddedKafkaBroker
         );
@@ -113,25 +145,14 @@ class KafkaPublisherIntegrationTest {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
         consumerProps.put(JsonDeserializer.TRUSTED_PACKAGES, "com.example.hexarch.user.domain.event");
         consumerProps.put(JsonDeserializer.VALUE_DEFAULT_TYPE, UserCreatedEvent.class.getName());
-        // IMPORTANTE: Leer desde el final para evitar leer mensajes de tests anteriores
-        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         DefaultKafkaConsumerFactory<String, UserCreatedEvent> consumerFactory =
                 new DefaultKafkaConsumerFactory<>(consumerProps);
 
-        testConsumer = consumerFactory.createConsumer();
-        embeddedKafkaBroker.consumeFromAnEmbeddedTopic(testConsumer, "user.created");
-
-        // Limpiar cualquier mensaje previo en el topic (de tests anteriores)
-        // Esto asegura que cada test empiece con un topic limpio
-        KafkaTestUtils.getRecords(testConsumer, Duration.ofMillis(500));
-    }
-
-    @AfterEach
-    void tearDown() {
-        if (testConsumer != null) {
-            testConsumer.close();
-        }
+        Consumer<String, UserCreatedEvent> consumer = consumerFactory.createConsumer();
+        embeddedKafkaBroker.consumeFromAnEmbeddedTopic(consumer, "user.created");
+        return consumer;
     }
 
     /**
@@ -160,13 +181,26 @@ class KafkaPublisherIntegrationTest {
         // WHEN - Publicar evento usando el Publisher REAL
         publisher.publish(event);
 
-        // THEN - Verificar que llegó a Kafka usando el TEST CONSUMER
+        // IMPORTANTE: Hacer flush() para asegurar que el mensaje se envíe a Kafka
+        kafkaTemplate.flush();
+
+        // THEN - Crear consumer DESPUÉS de publicar y verificar que llegó a Kafka
+        testConsumer = createTestConsumer("shouldPublishEventToKafkaSuccessfully");
         ConsumerRecords<String, UserCreatedEvent> records =
                 KafkaTestUtils.getRecords(testConsumer, Duration.ofSeconds(10));
 
         assertThat(records.count()).isGreaterThan(0);
 
-        ConsumerRecord<String, UserCreatedEvent> record = records.iterator().next();
+        // Buscar el mensaje que corresponde a este test (por userId)
+        ConsumerRecord<String, UserCreatedEvent> record = null;
+        for (ConsumerRecord<String, UserCreatedEvent> r : records) {
+            if (r.value().userId().equals(userId)) {
+                record = r;
+                break;
+            }
+        }
+
+        assertThat(record).isNotNull().withFailMessage("No se encontró el mensaje publicado en este test");
 
         // Verificar topic
         assertThat(record.topic()).isEqualTo("user.created");
@@ -223,7 +257,11 @@ class KafkaPublisherIntegrationTest {
         publisher.publish(event2);
         publisher.publish(event3);
 
-        // THEN - Verificar que todos llegaron con la misma key
+        // IMPORTANTE: Hacer flush() para asegurar que todos los mensajes se envíen a Kafka
+        kafkaTemplate.flush();
+
+        // THEN - Crear consumer DESPUÉS de publicar y verificar que todos llegaron
+        testConsumer = createTestConsumer("shouldUseUserIdAsKeyForOrdering");
         ConsumerRecords<String, UserCreatedEvent> records =
                 KafkaTestUtils.getRecords(testConsumer, Duration.ofSeconds(10));
 
@@ -269,7 +307,11 @@ class KafkaPublisherIntegrationTest {
         publisher.publish(event1);
         publisher.publish(event2);
 
-        // THEN - Verificar que llegaron con keys diferentes
+        // IMPORTANTE: Hacer flush() para asegurar que todos los mensajes se envíen a Kafka
+        kafkaTemplate.flush();
+
+        // THEN - Crear consumer DESPUÉS de publicar y verificar que llegaron
+        testConsumer = createTestConsumer("shouldUseDifferentKeysForDifferentUsers");
         ConsumerRecords<String, UserCreatedEvent> records =
                 KafkaTestUtils.getRecords(testConsumer, Duration.ofSeconds(10));
 
@@ -318,7 +360,11 @@ class KafkaPublisherIntegrationTest {
         // WHEN - Publicar evento
         publisher.publish(detailedEvent);
 
-        // THEN - Verificar que todos los datos están intactos
+        // IMPORTANTE: Hacer flush() para asegurar que el mensaje se envíe a Kafka
+        kafkaTemplate.flush();
+
+        // THEN - Crear consumer DESPUÉS de publicar y verificar que todos los datos están intactos
+        testConsumer = createTestConsumer("shouldPreserveAllEventData");
         ConsumerRecords<String, UserCreatedEvent> records =
                 KafkaTestUtils.getRecords(testConsumer, Duration.ofSeconds(10));
 

@@ -126,6 +126,15 @@ import org.testcontainers.junit.jupiter.Testcontainers;
         "security.enabled=false"
     }
 )
+/**
+ * @DirtiesContext NO es necesario aquí porque:
+ * - Cada ejecución de test E2E levanta su propia instancia de Spring Boot
+ * - El contexto se crea fresh cada vez que ejecutas el test
+ * - PostgreSQL Testcontainer se limpia automáticamente al terminar
+ *
+ * Solo sería necesario si tuvieras múltiples métodos @Test que compartieran contexto
+ * y necesitaras resetear la BD entre ellos.
+ */
 @Testcontainers
 public class KarateE2ETestcontainersTest {
 

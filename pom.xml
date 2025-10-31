@@ -445,6 +445,10 @@
 								<include>**/*Test.java</include>
 								<include>**/*IntegrationTest.java</include>
 							</includes>
+							<!-- IMPORTANTE: Ejecutar tests secuencialmente para evitar conflictos de Kafka embebido -->
+							<!-- Los tests de Kafka no pueden ejecutarse en paralelo porque comparten el mismo EmbeddedKafka -->
+							<forkCount>1</forkCount>
+							<reuseForks>false</reuseForks>
 							<!-- Variables de entorno para Testcontainers -->
 							<environmentVariables>
 								<!-- Desactivar ryuk para compatibilidad con Rancher Desktop -->

@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -53,14 +54,29 @@ import static org.mockito.Mockito.*;
  * - Notifications Service (este) → tiene el Consumer → consume eventos
  * - NO están en el mismo proyecto/microservicio
  */
-@SpringBootTest
+@SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
+/**
+ * @DirtiesContext - IMPORTANTE para tests de Kafka
+ *
+ * Esta anotación indica a Spring que el contexto de aplicación debe recargarse
+ * después de ejecutar esta clase de test. Esto es CRÍTICO para tests de Kafka porque:
+ *
+ * 1. EVITA CONTAMINACIÓN: Sin @DirtiesContext, el EmbeddedKafkaBroker y los topics
+ *    se comparten entre clases de test, causando que mensajes de un test aparezcan en otro.
+ *
+ * 2. GARANTIZA AISLAMIENTO: Cada clase de test obtiene un broker Kafka limpio,
+ *    sin mensajes residuales ni offsets de tests anteriores.
+ *
+ * 3. PUERTOS DINÁMICOS: Permite que cada test use puertos dinámicos diferentes,
+ *    evitando conflictos cuando se ejecutan tests en paralelo o secuencialmente.
+ *
+ * TRADE-OFF: Recargar el contexto es costoso (~2-3 segundos por clase), pero es
+ * necesario para garantizar tests deterministas y sin flakiness.
+ */
+@DirtiesContext
 @EmbeddedKafka(
         partitions = 1,
-        topics = {"user.created", "user.created.dlt"},
-        brokerProperties = {
-                "listeners=PLAINTEXT://localhost:9094",
-                "port=9094"
-        }
+        topics = {"user.created", "user.created.dlt"}
 )
 @Testcontainers
 @DisplayName("Kafka Consumer Integration Tests - Consumer Only")
@@ -79,9 +95,6 @@ class KafkaConsumerIntegrationTest {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
-
-        // Kafka - usar el broker embebido
-        registry.add("spring.kafka.bootstrap-servers", () -> "localhost:9094");
     }
 
     // ✅ KafkaTemplate - Para simular eventos de otro microservicio (User Service)
@@ -121,12 +134,12 @@ class KafkaConsumerIntegrationTest {
 
         // WHEN - Publicar directamente a Kafka (simula User Service)
         kafkaTemplate.send("user.created", userId.toString(), event);
+        kafkaTemplate.flush(); // Asegurar que el mensaje se envía antes de verificar
 
         // THEN - Verificar que el Consumer procesó el evento y llamó a EmailService
-        // IMPORTANTE: En CI el consumer tarda más en procesar mensajes
         await()
-                .atMost(Duration.ofSeconds(20))
-                .pollDelay(Duration.ofSeconds(1))
+                .atMost(Duration.ofSeconds(10))
+                .pollDelay(Duration.ofMillis(500))
                 .untilAsserted(() ->
                         verify(emailService, atLeast(1))
                                 .sendWelcomeEmail("consumer@test.com", "consumer-test-user")
@@ -161,12 +174,12 @@ class KafkaConsumerIntegrationTest {
         kafkaTemplate.send("user.created", sameKey, event1);
         kafkaTemplate.send("user.created", sameKey, event2);
         kafkaTemplate.send("user.created", sameKey, event3);
+        kafkaTemplate.flush(); // Asegurar que todos los mensajes se envían antes de verificar
 
         // THEN - Verificar que todos se procesaron
-        // IMPORTANTE: En CI el consumer tarda más en procesar mensajes
         await()
-                .atMost(Duration.ofSeconds(25))
-                .pollDelay(Duration.ofSeconds(1))
+                .atMost(Duration.ofSeconds(15))
+                .pollDelay(Duration.ofMillis(500))
                 .untilAsserted(() ->
                         verify(emailService, atLeast(3))
                                 .sendWelcomeEmail("user1@test.com", "user1")
@@ -204,12 +217,12 @@ class KafkaConsumerIntegrationTest {
 
         // WHEN - Publicar evento (fallará pero no debe detener el consumer)
         kafkaTemplate.send("user.created", userId.toString(), event);
+        kafkaTemplate.flush(); // Asegurar que el mensaje se envía antes de verificar
 
         // THEN - Verificar que se intentó enviar email (aunque falló)
-        // IMPORTANTE: En CI el consumer tarda más en procesar mensajes
         await()
-                .atMost(Duration.ofSeconds(20))
-                .pollDelay(Duration.ofSeconds(1))
+                .atMost(Duration.ofSeconds(10))
+                .pollDelay(Duration.ofMillis(500))
                 .untilAsserted(() ->
                         verify(emailService, atLeast(1))
                                 .sendWelcomeEmail("failure@test.com", "failure-test-user")
@@ -242,12 +255,12 @@ class KafkaConsumerIntegrationTest {
 
         // WHEN - Publicar evento
         kafkaTemplate.send("user.created", userId.toString(), detailedEvent);
+        kafkaTemplate.flush(); // Asegurar que el mensaje se envía antes de verificar
 
         // THEN - Verificar que se usaron los datos correctos
-        // IMPORTANTE: En CI el consumer tarda más en procesar mensajes
         await()
-                .atMost(Duration.ofSeconds(20))
-                .pollDelay(Duration.ofSeconds(1))
+                .atMost(Duration.ofSeconds(10))
+                .pollDelay(Duration.ofMillis(500))
                 .untilAsserted(() ->
                         verify(emailService).sendWelcomeEmail("detailed@example.com", "detailed-user")
                 );
@@ -276,12 +289,12 @@ class KafkaConsumerIntegrationTest {
 
         // WHEN - Publicar evento con key null
         kafkaTemplate.send("user.created", null, event);
+        kafkaTemplate.flush(); // Asegurar que el mensaje se envía antes de verificar
 
         // THEN - Verificar que se procesó
-        // IMPORTANTE: En CI el consumer tarda más en procesar mensajes
         await()
-                .atMost(Duration.ofSeconds(20))
-                .pollDelay(Duration.ofSeconds(1))
+                .atMost(Duration.ofSeconds(10))
+                .pollDelay(Duration.ofMillis(500))
                 .untilAsserted(() ->
                         verify(emailService).sendWelcomeEmail("nullkey@test.com", "nullkey-user")
                 );
@@ -318,11 +331,12 @@ class KafkaConsumerIntegrationTest {
         kafkaTemplate.send("user.created", userId1.toString(), event1);
         kafkaTemplate.send("user.created", userId2.toString(), event2);
         kafkaTemplate.send("user.created", userId3.toString(), event3);
+        kafkaTemplate.flush(); // Asegurar que todos los mensajes se envían antes de verificar
 
         // THEN - Verificar que todos se procesaron
         await()
-                .atMost(Duration.ofSeconds(25))
-                .pollDelay(Duration.ofSeconds(1))
+                .atMost(Duration.ofSeconds(15))
+                .pollDelay(Duration.ofMillis(500))
                 .untilAsserted(() ->
                         verify(emailService, atLeast(3))
                                 .sendWelcomeEmail(anyString(), anyString())

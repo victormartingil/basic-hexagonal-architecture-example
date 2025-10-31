@@ -23,6 +23,7 @@ import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.test.EmbeddedKafkaBroker;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -83,14 +84,29 @@ import static org.mockito.Mockito.*;
  * - DLT Consumer procesa mensaje sin reintentar
  * - No se pierde información del mensaje original
  */
-@SpringBootTest
+@SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
+/**
+ * @DirtiesContext - IMPORTANTE para tests de Kafka
+ *
+ * Esta anotación indica a Spring que el contexto de aplicación debe recargarse
+ * después de ejecutar esta clase de test. Esto es CRÍTICO para tests de Kafka porque:
+ *
+ * 1. EVITA CONTAMINACIÓN: Sin @DirtiesContext, el EmbeddedKafkaBroker y los topics
+ *    se comparten entre clases de test, causando que mensajes de un test aparezcan en otro.
+ *
+ * 2. GARANTIZA AISLAMIENTO: Cada clase de test obtiene un broker Kafka limpio,
+ *    sin mensajes residuales ni offsets de tests anteriores.
+ *
+ * 3. PUERTOS DINÁMICOS: Permite que cada test use puertos dinámicos diferentes,
+ *    evitando conflictos cuando se ejecutan tests en paralelo o secuencialmente.
+ *
+ * TRADE-OFF: Recargar el contexto es costoso (~2-3 segundos por clase), pero es
+ * necesario para garantizar tests deterministas y sin flakiness.
+ */
+@DirtiesContext
 @EmbeddedKafka(
         partitions = 1,
-        topics = {"user.created", "user.created.dlt"},
-        brokerProperties = {
-                "listeners=PLAINTEXT://localhost:9094",
-                "port=9094"
-        }
+        topics = {"user.created", "user.created.dlt"}
 )
 @Testcontainers
 @DisplayName("Kafka DLT Integration Tests - Retry & Dead Letter")
@@ -109,9 +125,6 @@ class KafkaDLTIntegrationTest {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
-
-        // Kafka - usar el broker embebido
-        registry.add("spring.kafka.bootstrap-servers", () -> "localhost:9094");
     }
 
     @Autowired
@@ -134,6 +147,8 @@ class KafkaDLTIntegrationTest {
         Mockito.reset(emailService, dltConsumer);
 
         // Configurar un consumer de test para verificar mensajes en el DLT
+        // NOTA: Este consumer usa un group ID compartido entre tests de esta clase
+        // Con @DirtiesContext, cada clase de test tiene un contexto limpio
         Map<String, Object> consumerProps = KafkaTestUtils.consumerProps(
                 "dlt-test-group",
                 "true",
@@ -183,6 +198,9 @@ class KafkaDLTIntegrationTest {
 
         // WHEN - Publicar evento al topic principal
         kafkaTemplate.send("user.created", userId.toString(), event);
+
+        // IMPORTANTE: Hacer flush() para asegurar que el mensaje se envíe a Kafka
+        kafkaTemplate.flush();
 
         // THEN - Verificar que EmailService se llamó múltiples veces (reintentos)
         // Nota: El número exacto depende de la configuración de reintentos en KafkaConfig
@@ -248,6 +266,9 @@ class KafkaDLTIntegrationTest {
 
         // WHEN - Publicar evento
         kafkaTemplate.send("user.created", userId.toString(), event);
+
+        // IMPORTANTE: Hacer flush() para asegurar que el mensaje se envíe a Kafka
+        kafkaTemplate.flush();
 
         // THEN - Verificar headers del DLT
         await()
@@ -317,6 +338,9 @@ class KafkaDLTIntegrationTest {
         // WHEN - Publicar evento (fallará y irá al DLT)
         kafkaTemplate.send("user.created", userId.toString(), event);
 
+        // IMPORTANTE: Hacer flush() para asegurar que el mensaje se envíe a Kafka
+        kafkaTemplate.flush();
+
         // THEN - Verificar que DLT Consumer procesa el mensaje
         await()
                 .atMost(Duration.ofSeconds(20))
@@ -374,6 +398,9 @@ class KafkaDLTIntegrationTest {
         // WHEN - Publicar evento
         kafkaTemplate.send("user.created", userId.toString(), event);
 
+        // IMPORTANTE: Hacer flush() para asegurar que el mensaje se envíe a Kafka
+        kafkaTemplate.flush();
+
         // THEN - Verificar que se procesó exitosamente
         await()
                 .atMost(Duration.ofSeconds(10))
@@ -430,6 +457,9 @@ class KafkaDLTIntegrationTest {
 
         // WHEN - Publicar evento
         kafkaTemplate.send("user.created", specificUserId.toString(), event);
+
+        // IMPORTANTE: Hacer flush() para asegurar que el mensaje se envíe a Kafka
+        kafkaTemplate.flush();
 
         // THEN - Verificar que todos los datos están intactos en el DLT
         await()

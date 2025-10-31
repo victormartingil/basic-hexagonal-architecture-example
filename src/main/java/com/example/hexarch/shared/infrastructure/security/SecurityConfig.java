@@ -155,12 +155,12 @@ public class SecurityConfig {
 
                         // ========== ENDPOINTS PROTEGIDOS (requieren autenticación) ==========
 
-                        // POST /api/users (createUser) → Solo ADMIN o MANAGER
-                        .requestMatchers(HttpMethod.POST, "/api/users")
+                        // POST /api/v1/users (createUser) → Solo ADMIN o MANAGER
+                        .requestMatchers(HttpMethod.POST, "/api/v1/users")
                         .hasAnyRole("ADMIN", "MANAGER")
 
-                        // GET /api/users/{id} (getUser) → Cualquier usuario autenticado
-                        .requestMatchers(HttpMethod.GET, "/api/users/**")
+                        // GET /api/v1/users/{id} (getUser) → Cualquier usuario autenticado
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/**")
                         .authenticated()
 
                         // ========== TODOS LOS DEMÁS ENDPOINTS ==========
