@@ -99,11 +99,11 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
 - **🩺 Spring Actuator**: Health, metrics, prometheus endpoints
 
 ### **✅ Testing Completo**
-- **126+ Tests Totales**: Unit (79), Integration (16), Architecture (21), E2E (10+)
+- **175+ Tests Totales**: Unit (90+), Integration (16), Architecture (21), E2E (10+)
 - **🥒 E2E con Karate**: Tests end-to-end con Gherkin/BDD (local y docker modes)
 - **🐳 Testcontainers**: Integration tests con PostgreSQL y Embedded Kafka
 - **📊 Test Pyramid**: 65% Unit, 15% Integration, 10% E2E (recomendado)
-- **📊 JaCoCo**: Cobertura de código 80%+ (enforced)
+- **📊 JaCoCo Coverage**: 80% líneas, 65% branches (enforced) - [Ver configuración](docs/17-JaCoCo-Coverage-Guide.md)
 - **Kafka Tests**: Separados por Publisher/Consumer siguiendo best practices
 
 ### **🚀 CI/CD y DevOps**

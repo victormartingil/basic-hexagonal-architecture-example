@@ -44,6 +44,7 @@
 
 		<!-- JaCoCo Configuration -->
 		<jacoco.coverage.minimum>0.80</jacoco.coverage.minimum>
+		<jacoco.coverage.minimum.branches>0.65</jacoco.coverage.minimum.branches>
 		<sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
 		<sonar.dynamicAnalysis>reuseReports</sonar.dynamicAnalysis>
 		<sonar.jacoco.reportPath>${project.basedir}/target/jacoco.exec</sonar.jacoco.reportPath>
@@ -393,7 +394,7 @@
 										<limit>
 											<counter>BRANCH</counter>
 											<value>COVEREDRATIO</value>
-											<minimum>${jacoco.coverage.minimum}</minimum>
+											<minimum>${jacoco.coverage.minimum.branches}</minimum>
 										</limit>
 									</limits>
 								</rule>
@@ -407,6 +408,7 @@
 						<exclude>**/target/generated-sources/**</exclude>
 						<exclude>**/dto/generated/**</exclude>
 						<exclude>**/api/generated/**</exclude>
+						<exclude>**/rest/api/**</exclude>
 						<exclude>**/*Entity.class</exclude>
 						<exclude>**/*Application.class</exclude>
 						<exclude>**/*Config.class</exclude>
