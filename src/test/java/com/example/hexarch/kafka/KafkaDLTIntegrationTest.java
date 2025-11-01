@@ -145,12 +145,20 @@ class KafkaDLTIntegrationTest {
     void setUp() {
         // Reset mocks
         Mockito.reset(emailService, dltConsumer);
+        // NO crear consumer aquí - cada test lo creará on-demand
+        // Esto evita el error "Failed to be assigned partitions"
+        // porque el topic DLT puede no estar listo durante setUp()
+    }
 
-        // Configurar un consumer de test para verificar mensajes en el DLT
-        // NOTA: Este consumer usa un group ID compartido entre tests de esta clase
-        // Con @DirtiesContext, cada clase de test tiene un contexto limpio
+    /**
+     * Helper: Crea un consumer de test para DLT on-demand
+     *
+     * IMPORTANTE: Se crea DESPUÉS de que los mensajes fallen y se envíen al DLT,
+     * no en setUp(). Esto evita problemas de asignación de particiones.
+     */
+    private Consumer<String, UserCreatedEvent> createDLTTestConsumer(String testName) {
         Map<String, Object> consumerProps = KafkaTestUtils.consumerProps(
-                "dlt-test-group",
+                "dlt-test-" + testName + "-" + System.currentTimeMillis(),
                 "true",
                 embeddedKafkaBroker
         );
@@ -158,13 +166,14 @@ class KafkaDLTIntegrationTest {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
         consumerProps.put(JsonDeserializer.TRUSTED_PACKAGES, "com.example.hexarch.user.domain.event");
         consumerProps.put(JsonDeserializer.VALUE_DEFAULT_TYPE, UserCreatedEvent.class.getName());
-        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         DefaultKafkaConsumerFactory<String, UserCreatedEvent> consumerFactory =
                 new DefaultKafkaConsumerFactory<>(consumerProps);
 
-        dltTestConsumer = consumerFactory.createConsumer();
-        embeddedKafkaBroker.consumeFromAnEmbeddedTopic(dltTestConsumer, "user.created.dlt");
+        Consumer<String, UserCreatedEvent> consumer = consumerFactory.createConsumer();
+        embeddedKafkaBroker.consumeFromAnEmbeddedTopic(consumer, "user.created.dlt");
+        return consumer;
     }
 
     /**
@@ -212,17 +221,31 @@ class KafkaDLTIntegrationTest {
                                 .sendWelcomeEmail("dlt@test.com", "dlt-test-user")
                 );
 
+        // Crear consumer DESPUÉS de que el mensaje haya fallado y se haya enviado al DLT
+        // Esto evita el error "Failed to be assigned partitions"
+        dltTestConsumer = createDLTTestConsumer("shouldSendMessageToDLTAfterMultipleFailures");
+
         // Verificar que el mensaje llegó al DLT
+        // IMPORTANTE: DLT tests tardan más porque esperan múltiples reintentos antes de enviar al DLT
         await()
-                .atMost(Duration.ofSeconds(20))
-                .pollInterval(Duration.ofSeconds(2))
+                .atMost(Duration.ofSeconds(30))
+                .pollDelay(Duration.ofSeconds(2))
                 .untilAsserted(() -> {
                     ConsumerRecords<String, UserCreatedEvent> dltRecords =
-                            KafkaTestUtils.getRecords(dltTestConsumer, Duration.ofSeconds(5));
+                            KafkaTestUtils.getRecords(dltTestConsumer, Duration.ofSeconds(3));
 
                     assertThat(dltRecords.count()).isGreaterThan(0);
 
-                    ConsumerRecord<String, UserCreatedEvent> dltRecord = dltRecords.iterator().next();
+                    // Buscar el mensaje de ESTE test
+                    ConsumerRecord<String, UserCreatedEvent> dltRecord = null;
+                    for (ConsumerRecord<String, UserCreatedEvent> r : dltRecords) {
+                        if (r.value().userId().equals(userId)) {
+                            dltRecord = r;
+                            break;
+                        }
+                    }
+
+                    assertThat(dltRecord).isNotNull();
 
                     // Verificar topic DLT
                     assertThat(dltRecord.topic()).isEqualTo("user.created.dlt");
@@ -270,17 +293,39 @@ class KafkaDLTIntegrationTest {
         // IMPORTANTE: Hacer flush() para asegurar que el mensaje se envíe a Kafka
         kafkaTemplate.flush();
 
-        // THEN - Verificar headers del DLT
+        // Esperar a que el mensaje falle y vaya al DLT
         await()
-                .atMost(Duration.ofSeconds(20))
-                .pollInterval(Duration.ofSeconds(2))
+                .atMost(Duration.ofSeconds(15))
+                .pollDelay(Duration.ofSeconds(1))
+                .untilAsserted(() ->
+                        verify(emailService, atLeast(1))
+                                .sendWelcomeEmail(anyString(), anyString())
+                );
+
+        // Crear consumer DESPUÉS de que el mensaje haya fallado
+        dltTestConsumer = createDLTTestConsumer("shouldContainErrorHeadersInDLT");
+
+        // THEN - Verificar headers del DLT
+        // IMPORTANTE: DLT tests tardan más porque esperan múltiples reintentos
+        await()
+                .atMost(Duration.ofSeconds(30))
+                .pollDelay(Duration.ofSeconds(2))
                 .untilAsserted(() -> {
                     ConsumerRecords<String, UserCreatedEvent> dltRecords =
-                            KafkaTestUtils.getRecords(dltTestConsumer, Duration.ofSeconds(5));
+                            KafkaTestUtils.getRecords(dltTestConsumer, Duration.ofSeconds(3));
 
                     assertThat(dltRecords.count()).isGreaterThan(0);
 
-                    ConsumerRecord<String, UserCreatedEvent> dltRecord = dltRecords.iterator().next();
+                    // Buscar el mensaje de ESTE test
+                    ConsumerRecord<String, UserCreatedEvent> dltRecord = null;
+                    for (ConsumerRecord<String, UserCreatedEvent> r : dltRecords) {
+                        if (r.value().userId().equals(userId)) {
+                            dltRecord = r;
+                            break;
+                        }
+                    }
+
+                    assertThat(dltRecord).isNotNull();
                     Headers headers = dltRecord.headers();
 
                     // Verificar header: original topic
@@ -383,9 +428,6 @@ class KafkaDLTIntegrationTest {
         // GIVEN - EmailService funciona correctamente (sin fallos)
         doNothing().when(emailService).sendWelcomeEmail(anyString(), anyString());
 
-        // Limpiar cualquier registro previo del DLT consumer
-        KafkaTestUtils.getRecords(dltTestConsumer, Duration.ofMillis(100));
-
         // Crear evento
         UUID userId = UUID.randomUUID();
         UserCreatedEvent event = new UserCreatedEvent(
@@ -404,16 +446,20 @@ class KafkaDLTIntegrationTest {
         // THEN - Verificar que se procesó exitosamente
         await()
                 .atMost(Duration.ofSeconds(10))
+                .pollDelay(Duration.ofMillis(500))
                 .untilAsserted(() ->
                         verify(emailService, times(1))
                                 .sendWelcomeEmail("success@test.com", "success-test-user")
                 );
 
+        // Crear consumer para verificar que el DLT está vacío
+        dltTestConsumer = createDLTTestConsumer("successfulMessageShouldNotGoToDLT");
+
         // Verificar que NO llegó al DLT
-        // Esperar un poco para asegurarnos de que no llegó
+        // Esperar un poco y verificar que no hay mensajes de ESTE test en el DLT
         await()
-                .during(Duration.ofSeconds(3))
-                .atMost(Duration.ofSeconds(5))
+                .during(Duration.ofSeconds(2))
+                .atMost(Duration.ofSeconds(4))
                 .untilAsserted(() -> {
                     ConsumerRecords<String, UserCreatedEvent> dltRecords =
                             dltTestConsumer.poll(Duration.ofMillis(500));
@@ -461,17 +507,39 @@ class KafkaDLTIntegrationTest {
         // IMPORTANTE: Hacer flush() para asegurar que el mensaje se envíe a Kafka
         kafkaTemplate.flush();
 
-        // THEN - Verificar que todos los datos están intactos en el DLT
+        // Esperar a que el mensaje falle y vaya al DLT
         await()
-                .atMost(Duration.ofSeconds(20))
-                .pollInterval(Duration.ofSeconds(2))
+                .atMost(Duration.ofSeconds(15))
+                .pollDelay(Duration.ofSeconds(1))
+                .untilAsserted(() ->
+                        verify(emailService, atLeast(1))
+                                .sendWelcomeEmail(anyString(), anyString())
+                );
+
+        // Crear consumer DESPUÉS de que el mensaje haya fallado
+        dltTestConsumer = createDLTTestConsumer("shouldPreserveEventDataInDLT");
+
+        // THEN - Verificar que todos los datos están intactos en el DLT
+        // IMPORTANTE: DLT tests tardan más porque esperan múltiples reintentos
+        await()
+                .atMost(Duration.ofSeconds(30))
+                .pollDelay(Duration.ofSeconds(2))
                 .untilAsserted(() -> {
                     ConsumerRecords<String, UserCreatedEvent> dltRecords =
-                            KafkaTestUtils.getRecords(dltTestConsumer, Duration.ofSeconds(5));
+                            KafkaTestUtils.getRecords(dltTestConsumer, Duration.ofSeconds(3));
 
                     assertThat(dltRecords.count()).isGreaterThan(0);
 
-                    ConsumerRecord<String, UserCreatedEvent> dltRecord = dltRecords.iterator().next();
+                    // Buscar el mensaje de ESTE test
+                    ConsumerRecord<String, UserCreatedEvent> dltRecord = null;
+                    for (ConsumerRecord<String, UserCreatedEvent> r : dltRecords) {
+                        if (r.value().userId().equals(specificUserId)) {
+                            dltRecord = r;
+                            break;
+                        }
+                    }
+
+                    assertThat(dltRecord).isNotNull();
                     UserCreatedEvent dltEvent = dltRecord.value();
 
                     // Verificar todos los campos

@@ -67,7 +67,8 @@ class EmailServiceIntegrationTest {
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
             .withDatabaseName("testdb")
             .withUsername("test")
-            .withPassword("test");
+            .withPassword("test")
+            .withStartupTimeout(java.time.Duration.ofSeconds(120));
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
@@ -192,24 +193,24 @@ class EmailServiceIntegrationTest {
     }
 
     /**
-     * TEST CASE 5: Fallback debe ejecutarse cuando circuit está OPEN
+     * TEST CASE 5: Circuit debe lanzar excepción cuando está OPEN
      *
      * GIVEN: Circuit breaker en estado OPEN
      * WHEN: Se intenta enviar un email
-     * THEN: El fallback debe ejecutarse sin lanzar excepción
+     * THEN: Debe lanzar CallNotPermittedException (sin fallback)
+     *
+     * NOTA: Ya no usamos fallback porque queremos que Kafka maneje los reintentos y DLT
      */
     @Test
-    @DisplayName("Fallback debe ejecutarse cuando circuit está OPEN")
-    void shouldExecuteFallbackWhenCircuitIsOpen() {
+    @DisplayName("Circuit debe lanzar excepción cuando está OPEN")
+    void shouldThrowExceptionWhenCircuitIsOpen() {
         // GIVEN - Forzar circuit a OPEN
         circuitBreaker.transitionToOpenState();
 
-        // WHEN - Intentar enviar email
-        // El fallback debe ejecutarse y NO lanzar excepción
-        emailService.sendWelcomeEmail("test@test.com", "test");
-
-        // THEN - Verificar que no se lanzó excepción
-        // (el test pasa si no hay excepción)
+        // WHEN/THEN - Intentar enviar email debe lanzar CallNotPermittedException
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                emailService.sendWelcomeEmail("test@test.com", "test")
+        ).isInstanceOf(io.github.resilience4j.circuitbreaker.CallNotPermittedException.class);
 
         // Verificar que el circuit sigue en OPEN
         assertThat(circuitBreaker.getState())

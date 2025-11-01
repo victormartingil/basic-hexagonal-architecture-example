@@ -208,24 +208,25 @@ public class UserEventsKafkaConsumer {
 
             // ⚠️ IMPORTANTE: Decidir qué hacer con el error
             //
-            // OPCIÓN 1: Lanzar excepción
+            // OPCIÓN 1: Lanzar excepción (IMPLEMENTADA)
             // - Kafka NO avanzará el offset
-            // - Reintentará el mismo mensaje (según configuración)
-            // - Riesgo: loop infinito si el error es permanente
-            // throw new RuntimeException("Failed to process notification", e);
+            // - Reintentará el mismo mensaje (según configuración en KafkaConfig)
+            // - Después de N reintentos → Kafka enviará a DLT automáticamente
+            // - DefaultErrorHandler con DeadLetterPublishingRecoverer maneja esto
             //
             // OPCIÓN 2: Loguear y continuar (NO lanzar excepción)
             // - Kafka avanza el offset (mensaje marcado como procesado)
             // - El mensaje "se pierde" (no se reintenta)
             // - Útil si el error no es crítico
             //
-            // OPCIÓN 3: Enviar a Dead Letter Topic (DLT)
-            // - Envía el mensaje problemático a otro topic
+            // OPCIÓN 3: Enviar a Dead Letter Topic (DLT) manualmente
+            // - Envías el mensaje problemático a otro topic manualmente
             // - Kafka avanza el offset
-            // - Puedes revisar/reprocesar el DLT después
-            // kafkaTemplate.send("user.created.dlt", key, event);
+            // - Más control pero más código
             //
-            // En este ejemplo: Opción 2 (loguear y continuar)
+            // En este ejemplo: Opción 1 (lanzar excepción)
+            // Permite que Kafka maneje reintentos y DLT automáticamente
+            throw new RuntimeException("Failed to process notification", e);
             // Las notificaciones no son críticas, el usuario ya está creado
         }
     }

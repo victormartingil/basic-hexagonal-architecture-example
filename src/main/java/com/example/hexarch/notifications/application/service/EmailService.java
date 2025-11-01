@@ -3,6 +3,7 @@ package com.example.hexarch.notifications.application.service;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.Random;
@@ -105,6 +106,9 @@ public class EmailService {
     private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
     private final Random random = new Random();
 
+    @Value("${email.service.failure-rate:30}")
+    private int failureRatePercentage;
+
     /**
      * Envía email de bienvenida con protección de Circuit Breaker
      *
@@ -133,7 +137,9 @@ public class EmailService {
      * @param username nombre del usuario
      * @throws RuntimeException si el servicio falla (simulado)
      */
-    @CircuitBreaker(name = "emailService", fallbackMethod = "sendEmailFallback")
+    // NOTA: No usamos fallbackMethod para permitir que excepciones se propaguen a Kafka
+    // Kafka manejará reintentos y DLT. Circuit Breaker aún registra métricas.
+    @CircuitBreaker(name = "emailService")
     public void sendWelcomeEmail(String email, String username) {
         logger.info("📧 [EMAIL SERVICE] Attempting to send welcome email to: {}", email);
 
@@ -145,8 +151,9 @@ public class EmailService {
         // sesClient.sendEmail(request);
         // mailgunClient.send(message);
 
-        // Simular fallo aleatorio (30% de probabilidad)
-        if (random.nextInt(100) < 30) {
+        // Simular fallo aleatorio (configurable via property email.service.failure-rate)
+        // Default: 30%, Tests: 0% (set in test properties)
+        if (random.nextInt(100) < failureRatePercentage) {
             logger.error("❌ [EMAIL SERVICE] Failed to send email - Service temporarily unavailable");
             throw new RuntimeException("Email service temporarily unavailable");
         }
