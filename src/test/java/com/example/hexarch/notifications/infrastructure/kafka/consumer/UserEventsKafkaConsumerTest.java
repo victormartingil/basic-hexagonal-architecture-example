@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 /**
@@ -115,10 +116,11 @@ class UserEventsKafkaConsumerTest {
         doThrow(new RuntimeException("Email service temporarily unavailable"))
                 .when(emailService).sendWelcomeEmail(anyString(), anyString());
 
-        // WHEN - Procesar evento
-        // NO debe lanzar excepción
-        assertThatCode(() -> consumer.consume(testEvent, 0, 123L, testUserId.toString()))
-                .doesNotThrowAnyException();
+        // WHEN/THEN - Procesar evento DEBE lanzar excepción (nuevo comportamiento para DLT)
+        // El comportamiento cambió: ahora propagamos excepciones a Kafka para retry/DLT
+        assertThatThrownBy(() -> consumer.consume(testEvent, 0, 123L, testUserId.toString()))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to process notification");
 
         // THEN - Verificar que se intentó enviar email
         verify(emailService).sendWelcomeEmail("john@example.com", "johndoe");
