@@ -215,7 +215,17 @@ public class KafkaConfig {
         // DeadLetterPublishingRecoverer: Publica mensajes fallidos a topic DLT
         // - Topic DLT = topic original + ".dlt"
         // - Ejemplo: "user.created" → "user.created.dlt"
-        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
+        //
+        // Configuración explícita del topic de destino usando BiFunction:
+        // - BiFunction<ConsumerRecord<?, ?>, Exception, TopicPartition> destinationResolver
+        // - Retorna el TopicPartition de destino para el DLT
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate,
+                (consumerRecord, exception) -> {
+                    // Topic de destino = topic original + ".dlt"
+                    String dltTopic = consumerRecord.topic() + ".dlt";
+                    // Mantener la misma partición (o usar partición 0 para todos)
+                    return new org.apache.kafka.common.TopicPartition(dltTopic, 0);
+                });
 
         // DefaultErrorHandler: Maneja errores con reintentos automáticos
         // - FixedBackOff(1000L, 3L): 3 reintentos con 1 segundo entre cada uno

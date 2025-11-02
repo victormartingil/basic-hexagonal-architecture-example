@@ -58,7 +58,9 @@ import java.util.concurrent.TimeUnit;
         "resilience4j.circuitbreaker.instances.emailService.wait-duration-in-open-state=1s",
         "resilience4j.circuitbreaker.instances.emailService.sliding-window-size=10",
         "resilience4j.circuitbreaker.instances.emailService.minimum-number-of-calls=5",
-        "resilience4j.circuitbreaker.instances.emailService.failure-rate-threshold=50"
+        "resilience4j.circuitbreaker.instances.emailService.failure-rate-threshold=50",
+        // Desactivar fallos aleatorios en tests para evitar flakiness
+        "email.service.failure-rate=0"
 })
 @DisplayName("EmailService - Circuit Breaker Integration Tests")
 class EmailServiceIntegrationTest {

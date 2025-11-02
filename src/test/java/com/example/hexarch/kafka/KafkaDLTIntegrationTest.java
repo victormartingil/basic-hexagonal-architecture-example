@@ -85,7 +85,10 @@ import static org.mockito.Mockito.*;
  * - DLT Consumer procesa mensaje sin reintentar
  * - No se pierde información del mensaje original
  */
-@SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
+@SpringBootTest(properties = {
+        "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
+        "email.service.failure-rate=70"  // Alta tasa de fallos para tests DLT
+})
 /**
  * @DirtiesContext - IMPORTANTE para tests de Kafka
  *
@@ -140,12 +143,21 @@ class KafkaDLTIntegrationTest {
     @SpyBean
     private UserCreatedEventDLTConsumer dltConsumer;
 
+    @Autowired
+    private io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry circuitBreakerRegistry;
+
     private Consumer<String, UserCreatedEvent> dltTestConsumer;
 
     @BeforeEach
     void setUp() {
         // Reset mocks
         Mockito.reset(emailService, dltConsumer);
+
+        // Reset Circuit Breaker para cada test
+        // IMPORTANTE: Sin esto, el CB se abre en el primer test y los siguientes fallan
+        circuitBreakerRegistry.circuitBreaker("emailService").transitionToClosedState();
+        circuitBreakerRegistry.circuitBreaker("emailService").reset();
+
         // NO crear consumer aquí - cada test lo creará on-demand
         // Esto evita el error "Failed to be assigned partitions"
         // porque el topic DLT puede no estar listo durante setUp()
@@ -196,7 +208,8 @@ class KafkaDLTIntegrationTest {
      * - Para arreglar: revisar DefaultErrorHandler config en test environment
      */
     @Test
-    @Disabled("DLT test times out waiting for message - requires Kafka retry configuration tuning in test environment")
+
+    // @Disabled("DLT test times out waiting for message - requires Kafka retry configuration tuning in test environment")
     @DisplayName("Debe enviar mensaje al DLT después de múltiples fallos")
     void shouldSendMessageToDLTAfterMultipleFailures() {
         // GIVEN - Configurar EmailService para fallar siempre
@@ -278,13 +291,14 @@ class KafkaDLTIntegrationTest {
      *   - Original partition
      *   - Original offset
      *
-     * ⚠️ DISABLED: Test timeout issues en EmbeddedKafka
-     * - Similar al test anterior, el mensaje no llega al DLT en tiempo esperado
-     * - Headers funcionan correctamente en producción
-     * - Requiere investigación de timing en test environment
+     * ⚠️ DISABLED: Test timeout issues con EmbeddedKafka
+     * - Este test específico timeout esperando mensajes en DLT
+     * - Los otros 4 tests DLT pasan correctamente
+     * - Headers DLT funcionan correctamente en producción
+     * - Issue específico: timing con on-demand consumer creation
      */
     @Test
-    @Disabled("DLT test times out waiting for message - requires Kafka retry configuration tuning in test environment")
+    @Disabled("DLT test times out - specific timing issue with this test, others pass")
     @DisplayName("DLT debe contener headers con información del error")
     void shouldContainErrorHeadersInDLT() {
         // GIVEN - Configurar EmailService para fallar con mensaje específico
@@ -376,14 +390,9 @@ class KafkaDLTIntegrationTest {
      *   - Debe loguear el error
      *
      * NOTA: El DLT Consumer es el "fin de la línea" para mensajes fallidos
-     *
-     * ⚠️ DISABLED: Test timeout issues en EmbeddedKafka
-     * - El DLT Consumer no recibe el mensaje dentro del timeout
-     * - DLT Consumer funciona correctamente en producción
-     * - Mismo root cause que tests anteriores: retry timing en test environment
      */
     @Test
-    @Disabled("DLT test times out waiting for message - requires Kafka retry configuration tuning in test environment")
+    // @Disabled("DLT test times out waiting for message - requires Kafka retry configuration tuning in test environment")
     @DisplayName("DLT Consumer debe procesar mensajes sin reintentar")
     void shouldProcessDLTMessageWithoutRetrying() {
         // GIVEN - Configurar EmailService para fallar
@@ -502,14 +511,9 @@ class KafkaDLTIntegrationTest {
      * GIVEN: Un evento con datos específicos que falla
      * WHEN: El evento va al DLT
      * THEN: Todos los datos deben estar intactos (userId, username, email, timestamp)
-     *
-     * ⚠️ DISABLED: Test timeout issues en EmbeddedKafka
-     * - Mensaje no alcanza DLT dentro del timeout
-     * - Data preservation funciona correctamente en producción
-     * - Mismo root cause que tests anteriores: retry timing configuration
      */
     @Test
-    @Disabled("DLT test times out waiting for message - requires Kafka retry configuration tuning in test environment")
+    // @Disabled("DLT test times out waiting for message - requires Kafka retry configuration tuning in test environment")
     @DisplayName("Datos del evento deben preservarse completamente en el DLT")
     void shouldPreserveEventDataInDLT() {
         // GIVEN - Configurar EmailService para fallar

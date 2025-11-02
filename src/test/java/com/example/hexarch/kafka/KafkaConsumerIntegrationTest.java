@@ -54,7 +54,10 @@ import static org.mockito.Mockito.*;
  * - Notifications Service (este) → tiene el Consumer → consume eventos
  * - NO están en el mismo proyecto/microservicio
  */
-@SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
+@SpringBootTest(properties = {
+        "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
+        "email.service.failure-rate=0"  // Desactivar fallos para tests de consumer normal
+})
 /**
  * @DirtiesContext - IMPORTANTE para tests de Kafka
  *
