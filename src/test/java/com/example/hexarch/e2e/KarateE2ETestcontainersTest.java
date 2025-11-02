@@ -5,6 +5,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -26,11 +28,12 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  *
  * CÓMO FUNCIONA:
  *
- * 1. Testcontainers levanta PostgreSQL y Kafka en contenedores Docker
- * 2. Spring Boot arranca la aplicación con webEnvironment = RANDOM_PORT
- * 3. La app se conecta a los contenedores de Testcontainers
- * 4. Karate ejecuta tests E2E contra http://localhost:{randomPort}
- * 5. Todo se limpia automáticamente al terminar
+ * 1. Testcontainers levanta PostgreSQL en un contenedor Docker
+ * 2. @EmbeddedKafka levanta un broker Kafka in-memory (sin contenedor)
+ * 3. Spring Boot arranca la aplicación con webEnvironment = RANDOM_PORT
+ * 4. La app se conecta a PostgreSQL (Testcontainer) y Kafka (EmbeddedKafka)
+ * 5. Karate ejecuta tests E2E contra http://localhost:{randomPort}
+ * 6. Todo se limpia automáticamente al terminar
  *
  * ARQUITECTURA:
  *
@@ -42,14 +45,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * ┌─────────────────────────────────────────────────────────────┐
  * │ SPRING BOOT APP (@SpringBootTest RANDOM_PORT)              │
  * │ └─ Controllers, Services, Repositories                     │
- * │ └─ Kafka DESHABILITADO (no es necesario para tests REST)  │
+ * │ └─ Kafka HABILITADO (EmbeddedKafka - in-memory)           │
  * │ └─ Security DESHABILITADO (valida funcionalidad, no auth) │
- * └─────────────┬───────────────────────────────────────────────┘
- *               ▼
- * ┌──────────────────────┐
- * │ PostgreSQL Container │
- * │ (Testcontainers)     │
- * └──────────────────────┘
+ * └─────────────┬────────────────┬──────────────────────────────┘
+ *               ▼                ▼
+ * ┌──────────────────────┐ ┌──────────────────┐
+ * │ PostgreSQL Container │ │ EmbeddedKafka    │
+ * │ (Testcontainers)     │ │ (In-memory)      │
+ * └──────────────────────┘ └──────────────────┘
  *
  * CÓMO EJECUTAR:
  *
@@ -72,7 +75,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * - Validación de contratos API (schemas de request/response)
  * - Happy paths y error cases (404, 400, 409, etc.)
  * - Integración real con PostgreSQL
- * - Nota: Kafka está DESHABILITADO para estos tests (solo validamos endpoints REST)
+ * - Publicación de eventos a Kafka (EmbeddedKafka - in-memory)
  * - Nota: Security está DESHABILITADO para estos tests (funcionalidad, no autenticación)
  *
  * DIFERENCIAS CON OTROS TIPOS DE TESTS:
@@ -121,20 +124,30 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
-        "spring.kafka.enabled=false",
-        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration",
+        "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
         "security.enabled=false"
     }
 )
 /**
- * @DirtiesContext NO es necesario aquí porque:
- * - Cada ejecución de test E2E levanta su propia instancia de Spring Boot
- * - El contexto se crea fresh cada vez que ejecutas el test
- * - PostgreSQL Testcontainer se limpia automáticamente al terminar
+ * @DirtiesContext - IMPORTANTE para E2E tests con Kafka embebido
  *
- * Solo sería necesario si tuvieras múltiples métodos @Test que compartieran contexto
- * y necesitaras resetear la BD entre ellos.
+ * Esta anotación indica a Spring que el contexto de aplicación debe recargarse
+ * después de ejecutar esta clase de test. Esto es CRÍTICO cuando usamos @EmbeddedKafka porque:
+ *
+ * 1. EVITA CONTAMINACIÓN: Sin @DirtiesContext, el EmbeddedKafkaBroker y los topics
+ *    se comparten entre clases de test, causando que mensajes de un test aparezcan en otro.
+ *
+ * 2. GARANTIZA AISLAMIENTO: Cada clase de test obtiene un broker Kafka limpio,
+ *    sin mensajes residuales ni offsets de tests anteriores.
+ *
+ * 3. PUERTOS DINÁMICOS: Permite que cada test use puertos dinámicos diferentes,
+ *    evitando conflictos cuando se ejecutan tests en paralelo.
  */
+@DirtiesContext
+@EmbeddedKafka(
+    partitions = 1,
+    topics = {"user.created", "user.created.dlt"}
+)
 @Testcontainers
 public class KarateE2ETestcontainersTest {
 
@@ -178,10 +191,10 @@ public class KarateE2ETestcontainersTest {
     @BeforeAll
     public static void setUp() {
         System.out.println("========================================");
-        System.out.println("🚀 Starting E2E Tests with Testcontainers");
+        System.out.println("🚀 Starting E2E Tests with Testcontainers + EmbeddedKafka");
         System.out.println("========================================");
         System.out.println("✅ PostgreSQL container starting...");
-        System.out.println("❌ Kafka: DISABLED (not needed for REST E2E tests)");
+        System.out.println("✅ EmbeddedKafka starting (in-memory broker)...");
     }
 
     /**
