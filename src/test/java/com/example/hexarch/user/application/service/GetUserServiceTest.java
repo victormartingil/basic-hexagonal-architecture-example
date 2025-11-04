@@ -1,8 +1,8 @@
 package com.example.hexarch.user.application.service;
 
-import com.example.hexarch.user.application.port.input.GetUserQuery;
-import com.example.hexarch.user.application.port.input.UserResult;
-import com.example.hexarch.user.application.port.output.UserRepository;
+import com.example.hexarch.user.application.model.GetUserQuery;
+import com.example.hexarch.user.application.model.UserResult;
+import com.example.hexarch.user.application.port.UserRepository;
 import com.example.hexarch.user.domain.exception.UserNotFoundException;
 import com.example.hexarch.user.domain.model.User;
 import org.junit.jupiter.api.BeforeEach;

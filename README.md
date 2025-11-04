@@ -519,12 +519,12 @@ Infrastructure → Application → Domain
 
 | Tipo | Patrón | Ejemplo | Ubicación |
 |------|--------|---------|-----------|
-| **UseCase** (Interface) | `{Accion}{Entidad}UseCase` | `CreateUserUseCase` | `application/port/input/` |
+| **UseCase** (Interface) | `{Accion}{Entidad}UseCase` | `CreateUserUseCase` | `application/model/` |
 | **Service** (Implementación) | `{Accion}{Entidad}Service` | `CreateUserService` | `application/service/` |
-| **Command** | `{Accion}{Entidad}Command` | `CreateUserCommand` | `application/port/input/` |
-| **Query** | `{Accion}{Entidad}Query` | `GetUserQuery` | `application/port/input/` |
-| **Result** | `{Entidad}Result` | `UserResult` | `application/port/input/` |
-| **Repository** (Interface) | `{Entidad}Repository` | `UserRepository` | `application/port/output/` |
+| **Command** | `{Accion}{Entidad}Command` | `CreateUserCommand` | `application/model/` |
+| **Query** | `{Accion}{Entidad}Query` | `GetUserQuery` | `application/model/` |
+| **Result** | `{Entidad}Result` | `UserResult` | `application/model/` |
+| **Repository** (Interface) | `{Entidad}Repository` | `UserRepository` | `application/port/` |
 | **Controller** | `{Entidad}Controller` | `UserController` | `infrastructure/.../rest/` |
 | **Request DTO** | `{Accion}{Entidad}Request` | `CreateUserRequest` | `infrastructure/.../dto/` |
 | **Response DTO** | `{Entidad}Response` | `UserResponse` | `infrastructure/.../dto/` |

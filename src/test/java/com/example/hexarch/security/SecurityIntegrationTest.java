@@ -2,9 +2,9 @@ package com.example.hexarch.security;
 
 import com.example.hexarch.shared.domain.security.Role;
 import com.example.hexarch.shared.infrastructure.security.jwt.JwtTokenProvider;
-import com.example.hexarch.user.application.port.output.UserRepository;
+import com.example.hexarch.user.application.port.UserRepository;
 import com.example.hexarch.user.domain.model.User;
-import com.example.hexarch.user.infrastructure.adapter.output.persistence.SpringDataUserRepository;
+import com.example.hexarch.user.infrastructure.persistence.SpringDataUserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

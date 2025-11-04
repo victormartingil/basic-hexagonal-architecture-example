@@ -1,9 +1,9 @@
 package com.example.hexarch.user.application.service;
 
-import com.example.hexarch.user.application.port.input.CreateUserCommand;
-import com.example.hexarch.user.application.port.input.UserResult;
-import com.example.hexarch.user.application.port.output.UserEventPublisher;
-import com.example.hexarch.user.application.port.output.UserRepository;
+import com.example.hexarch.user.application.model.CreateUserCommand;
+import com.example.hexarch.user.application.model.UserResult;
+import com.example.hexarch.user.application.port.UserEventPublisher;
+import com.example.hexarch.user.application.port.UserRepository;
 import com.example.hexarch.user.domain.event.UserCreatedEvent;
 import com.example.hexarch.user.domain.exception.UserAlreadyExistsException;
 import com.example.hexarch.user.domain.exception.ValidationException;

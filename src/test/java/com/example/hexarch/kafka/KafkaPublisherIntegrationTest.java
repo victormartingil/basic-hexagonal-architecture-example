@@ -1,7 +1,7 @@
 package com.example.hexarch.kafka;
 
 import com.example.hexarch.user.domain.event.UserCreatedEvent;
-import com.example.hexarch.user.infrastructure.adapter.output.event.KafkaUserEventPublisherAdapter;
+import com.example.hexarch.user.infrastructure.event.KafkaUserEventPublisherAdapter;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;

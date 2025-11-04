@@ -826,7 +826,7 @@ UserEntity → User → UserResult → UserResponse
 ```
 src/main/java/com/example/hexarch/user/
 
-infrastructure/adapter/input/rest/
+infrastructure/rest/
 ├── UserController.java                      ← 1. Recibe HTTP Request
 ├── dto/
 │   ├── CreateUserRequest.java              ← 2. DTO de entrada HTTP
@@ -834,7 +834,7 @@ infrastructure/adapter/input/rest/
 └── mapper/
     └── UserRestMapper.java                  ← 3. Mapea Request→Command, Result→Response
 
-application/port/input/
+application/model/ y application/port/
 ├── CreateUserUseCase.java                   ← 4. Interface del caso de uso
 ├── CreateUserCommand.java                   ← DTO de entrada (Application)
 └── UserResult.java                          ← 9. DTO de salida (Application)
@@ -848,18 +848,18 @@ domain/model/
     ├── Email.java                           ← Value Object
     └── Username.java                        ← Value Object
 
-application/port/output/
+application/port/
 ├── UserRepository.java                      ← Interface del repositorio (Output Port)
 └── UserEventPublisher.java                  ← Interface del publicador de eventos
 
-infrastructure/adapter/output/persistence/
+infrastructure/persistence/
 ├── JpaUserRepositoryAdapter.java            ← 7. Implementa UserRepository
 ├── UserEntity.java                          ← 8. Entidad JPA (tabla BD)
 ├── SpringDataUserRepository.java            ← JPA Repository de Spring Data
 └── mapper/
     └── UserEntityMapper.java                ← Mapea User↔UserEntity
 
-infrastructure/adapter/output/event/
+infrastructure/event/
 └── LogUserEventPublisherAdapter.java        ← Implementa UserEventPublisher
 
 domain/event/
@@ -898,15 +898,15 @@ shared/infrastructure/exception/
 | **Value Object** | Domain | `domain/model/valueobject/` | `Email.java` |
 | **Domain Event** | Domain | `domain/event/` | `UserCreatedEvent.java` |
 | **Domain Exception** | Domain | `domain/exception/` | `ValidationException.java` |
-| **Use Case Interface** | Application | `application/port/input/` | `CreateUserUseCase.java` |
-| **Command/Query** | Application | `application/port/input/` | `CreateUserCommand.java` |
-| **Result DTO** | Application | `application/port/input/` | `UserResult.java` |
-| **Repository Interface** | Application | `application/port/output/` | `UserRepository.java` |
+| **Use Case Interface** | Application | `application/model/ y application/port/` | `CreateUserUseCase.java` |
+| **Command/Query** | Application | `application/model/ y application/port/` | `CreateUserCommand.java` |
+| **Result DTO** | Application | `application/model/ y application/port/` | `UserResult.java` |
+| **Repository Interface** | Application | `application/port/` | `UserRepository.java` |
 | **Service** | Application | `application/service/` | `CreateUserService.java` |
-| **REST Controller** | Infrastructure | `infrastructure/adapter/input/rest/` | `UserController.java` |
-| **REST DTO** | Infrastructure | `infrastructure/adapter/input/rest/dto/` | `CreateUserRequest.java` |
-| **JPA Entity** | Infrastructure | `infrastructure/adapter/output/persistence/` | `UserEntity.java` |
-| **Repository Adapter** | Infrastructure | `infrastructure/adapter/output/persistence/` | `JpaUserRepositoryAdapter.java` |
+| **REST Controller** | Infrastructure | `infrastructure/rest/` | `UserController.java` |
+| **REST DTO** | Infrastructure | `infrastructure/rest/dto/` | `CreateUserRequest.java` |
+| **JPA Entity** | Infrastructure | `infrastructure/persistence/` | `UserEntity.java` |
+| **Repository Adapter** | Infrastructure | `infrastructure/persistence/` | `JpaUserRepositoryAdapter.java` |
 
 ---
 
@@ -961,7 +961,7 @@ graph TD
 
 ```java
 // Application define lo que necesita
-package application.port.output;
+package application.port;
 
 public interface UserRepository {  // ← Interface en Application
     User save(User user);
@@ -981,7 +981,7 @@ public class CreateUserService {
 }
 
 // Infrastructure la implementa
-package infrastructure.adapter.output.persistence;
+package infrastructure.persistence;
 
 @Repository
 public class JpaUserRepositoryAdapter implements UserRepository {  // ← Implementa
@@ -1006,7 +1006,7 @@ public class JpaUserRepositoryAdapter implements UserRepository {  // ← Implem
 
 1. **Application - Crear Input Port:**
 ```java
-// application/port/input/GetUserUseCase.java
+// application/model/ y application/port/GetUserUseCase.java
 public interface GetUserUseCase {
     UserResult execute(UUID userId);
 }
@@ -1029,7 +1029,7 @@ public class GetUserService implements GetUserUseCase {
 
 3. **Infrastructure - Agregar en Controller:**
 ```java
-// infrastructure/adapter/input/rest/UserController.java
+// infrastructure/rest/UserController.java
 @GetMapping("/{id}")
 public ResponseEntity<UserResponse> getUser(@PathVariable UUID id) {
     UserResult result = getUserUseCase.execute(id);
@@ -1051,7 +1051,7 @@ public ResponseEntity<UserResponse> getUser(@PathVariable UUID id) {
 3. **Crear nuevo adapter en Infrastructure:**
 
 ```java
-// infrastructure/adapter/output/persistence/MongoUserRepositoryAdapter.java
+// infrastructure/persistence/MongoUserRepositoryAdapter.java
 @Repository
 public class MongoUserRepositoryAdapter implements UserRepository {
 

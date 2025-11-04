@@ -124,8 +124,8 @@ class HexagonalArchitectureTest {
             ArchRule rule = classes()
                 .that().resideInAPackage("..user.application.service..")
                 .and().haveSimpleNameEndingWith("Service")
-                .should().implement(com.example.hexarch.user.application.port.input.CreateUserUseCase.class)
-                .orShould().implement(com.example.hexarch.user.application.port.input.GetUserUseCase.class)
+                .should().implement(com.example.hexarch.user.application.port.CreateUserUseCase.class)
+                .orShould().implement(com.example.hexarch.user.application.port.GetUserUseCase.class)
                 .because("User Services deben implementar interfaces de Use Cases (Input Ports). " +
                          "Nota: Servicios técnicos (EmailService, NotificationService) no son Use Cases, " +
                          "son Output Adapters y no necesitan implementar esta regla.");
@@ -156,11 +156,11 @@ class HexagonalArchitectureTest {
     class InfrastructureLayerRules {
 
         @Test
-        @DisplayName("Controllers deben estar en el paquete input.rest (o subdirectorios)")
-        void controllersShouldBeInInputRestPackage() {
+        @DisplayName("Controllers deben estar en el paquete rest (o subdirectorios)")
+        void controllersShouldBeInRestPackage() {
             ArchRule rule = classes()
                 .that().haveSimpleNameEndingWith("Controller")
-                .should().resideInAPackage("..infrastructure.adapter.input.rest..")
+                .should().resideInAPackage("..infrastructure.rest..")
                 .because("Controllers son Input Adapters y deben estar en el paquete correcto (permite subdirectorios)");
 
             rule.check(importedClasses);
@@ -181,20 +181,20 @@ class HexagonalArchitectureTest {
         @DisplayName("Repository Adapters deben implementar interfaces de Output Ports")
         void repositoryAdaptersShouldImplementRepositoryInterfaces() {
             ArchRule rule = classes()
-                .that().resideInAPackage("..infrastructure.adapter.output.persistence..")
+                .that().resideInAPackage("..infrastructure.persistence..")
                 .and().haveSimpleNameEndingWith("RepositoryAdapter")
-                .should().implement(com.example.hexarch.user.application.port.output.UserRepository.class)
+                .should().implement(com.example.hexarch.user.application.port.UserRepository.class)
                 .because("Repository Adapters deben implementar interfaces de Output Ports");
 
             rule.check(importedClasses);
         }
 
         @Test
-        @DisplayName("JPA Entities deben estar en el paquete persistence")
+        @DisplayName("JPA Entities deben estar en el paquete persistence.model")
         void entitiesShouldBeInPersistencePackage() {
             ArchRule rule = classes()
                 .that().areAnnotatedWith(jakarta.persistence.Entity.class)
-                .should().resideInAPackage("..infrastructure.adapter.output.persistence..")
+                .should().resideInAPackage("..infrastructure.persistence.model..")
                 .because("JPA Entities son detalles de implementación y pertenecen a Infrastructure");
 
             rule.check(importedClasses);
@@ -256,7 +256,7 @@ class HexagonalArchitectureTest {
         @DisplayName("Commands y Queries deben tener sufijo apropiado")
         void commandsAndQueriesShouldHaveAppropiateSuffix() {
             ArchRule rule = classes()
-                .that().resideInAPackage("..application.port.input..")
+                .that().resideInAPackage("..application.model..")
                 .and().areNotInterfaces()
                 .and().areRecords()
                 .and().haveSimpleNameNotEndingWith("Result")  // Results son DTOs de salida, no de entrada
@@ -271,8 +271,9 @@ class HexagonalArchitectureTest {
         @DisplayName("Use Cases deben tener sufijo 'UseCase'")
         void useCasesShouldHaveUseCaseSuffix() {
             ArchRule rule = classes()
-                .that().resideInAPackage("..application.port.input..")
+                .that().resideInAPackage("..application.port..")
                 .and().areInterfaces()
+                .and().haveSimpleNameEndingWith("UseCase")
                 .should().haveSimpleNameEndingWith("UseCase")
                 .because("Interfaces de casos de uso deben tener sufijo 'UseCase'");
 
@@ -341,24 +342,24 @@ class HexagonalArchitectureTest {
         }
 
         @Test
-        @DisplayName("Repository interfaces (Output Ports) deben estar en application.port.output")
+        @DisplayName("Repository interfaces (Output Ports) deben estar en application.port")
         void repositoryInterfacesShouldBeInOutputPort() {
             ArchRule rule = classes()
                 .that().areInterfaces()
                 .and().haveSimpleNameEndingWith("Repository")
                 .and().resideOutsideOfPackage("..infrastructure..")  // Excluye Spring Data repositories
-                .should().resideInAPackage("..application.port.output..")
-                .because("Repository interfaces (Output Ports) deben estar en application.port.output");
+                .should().resideInAPackage("..application.port..")
+                .because("Repository interfaces (Output Ports) deben estar en application.port");
 
             rule.check(importedClasses);
         }
 
         @Test
-        @DisplayName("Mappers deben estar en infrastructure.adapter")
+        @DisplayName("Mappers deben estar en infrastructure")
         void mappersShouldBeInInfrastructure() {
             ArchRule rule = classes()
                 .that().haveSimpleNameEndingWith("Mapper")
-                .should().resideInAPackage("..infrastructure.adapter..")
+                .should().resideInAPackage("..infrastructure..")
                 .because("Mappers son detalles de implementación y pertenecen a Infrastructure");
 
             rule.check(importedClasses);
