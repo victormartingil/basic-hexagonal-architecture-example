@@ -2,6 +2,8 @@ package com.example.hexarch.user.application.service;
 
 import com.example.hexarch.user.application.model.CreateUserCommand;
 import com.example.hexarch.user.application.model.UserResult;
+import com.example.hexarch.user.application.port.ExternalUserApiClient;
+import com.example.hexarch.user.application.port.ExternalUserApiClient.ExternalUserData;
 import com.example.hexarch.user.application.port.UserEventPublisher;
 import com.example.hexarch.user.application.port.UserRepository;
 import com.example.hexarch.user.domain.event.UserCreatedEvent;
@@ -18,9 +20,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.lenient;
@@ -62,6 +67,9 @@ class CreateUserServiceTest {
     private UserEventPublisher userEventPublisher;
 
     @Mock
+    private ExternalUserApiClient externalUserApiClient;
+
+    @Mock
     private MeterRegistry meterRegistry;
 
     // Instancia a testear
@@ -81,10 +89,24 @@ class CreateUserServiceTest {
         lenient().when(meterRegistry.counter(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(mockCounter);
 
+        // Mock del ExternalUserApiClient (siempre retorna datos mock)
+        // Usamos lenient() porque no todos los tests verifican esta llamada
+        ExternalUserData mockExternalData = new ExternalUserData(
+                1,
+                "Leanne Graham",
+                "Bret",
+                "Sincere@april.biz",
+                "1-770-736-8031 x56442",
+                "hildegard.org"
+        );
+        lenient().when(externalUserApiClient.getUserById(anyInt()))
+                .thenReturn(Optional.of(mockExternalData));
+
         // Crear instancia del servicio manualmente (inyectando mocks)
         createUserService = new CreateUserService(
                 userRepository,
                 userEventPublisher,
+                externalUserApiClient,  // Nuevo mock
                 meterRegistry,
                 "test"  // environment
         );

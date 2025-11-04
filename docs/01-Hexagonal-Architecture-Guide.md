@@ -477,6 +477,363 @@ Ejemplos para `UserRepository`:
 
 ---
 
+## Integración con APIs REST Externas
+
+### ¿Cuándo integrar con APIs externas?
+
+En aplicaciones modernas, es común necesitar integrar con servicios externos:
+- APIs de terceros (Stripe, SendGrid, Twilio, etc.)
+- Microservicios de tu organización
+- Sistemas legacy vía HTTP
+- Servicios públicos (geolocalización, clima, etc.)
+
+### Patrón de Integración en Arquitectura Hexagonal
+
+```mermaid
+graph LR
+    subgraph Application["🔄 APPLICATION"]
+        Service["CreateUserService"]
+        Port["ExternalUserApiClient<br/>(Output Port)"]
+    end
+
+    subgraph Infrastructure["🔌 INFRASTRUCTURE"]
+        Client["JsonPlaceholderClient<br/>(Adapter)"]
+        RestClient["Spring RestClient"]
+        Config["RestClientConfig"]
+    end
+
+    subgraph External["🌐 EXTERNAL API"]
+        API["JSONPlaceholder API<br/>https://jsonplaceholder.typicode.com"]
+    end
+
+    Service -->|usa| Port
+    Port -.implementado por.-| Client
+    Client -->|usa| RestClient
+    Config -->|configura| RestClient
+    Client -->|HTTP GET/POST| API
+
+    style Application fill:#fff4e1
+    style Infrastructure fill:#e1f5ff
+    style External fill:#ffe1f5
+```
+
+### Implementación Paso a Paso
+
+#### 1. Definir el Output Port (Application Layer)
+
+El puerto define **QUÉ** necesitamos de la API externa, no **CÓMO** lo obtenemos:
+
+```java
+// application/port/ExternalUserApiClient.java
+public interface ExternalUserApiClient {
+
+    Optional<ExternalUserData> getUserById(Integer externalUserId);
+
+    ExternalUserData createExternalUser(String name, String email);
+
+    // DTO en el puerto (contrato de Application)
+    record ExternalUserData(
+        Integer id,
+        String name,
+        String username,
+        String email,
+        String phone,
+        String website
+    ) {
+        public static ExternalUserData empty() {
+            return new ExternalUserData(null, null, null, null, null, null);
+        }
+    }
+}
+```
+
+**Ventajas de este diseño:**
+- Application no conoce la tecnología (RestClient, Feign, etc.)
+- El DTO está en Application (contrato limpio)
+- Puedes cambiar la implementación sin tocar Application
+
+#### 2. Configurar RestClient (Infrastructure Layer)
+
+```java
+// infrastructure/config/RestClientConfig.java
+@Configuration
+public class RestClientConfig {
+
+    @Bean(name = "jsonPlaceholderRestClient")
+    public RestClient jsonPlaceholderRestClient(
+        @Value("${external-api.jsonplaceholder.base-url}") String baseUrl,
+        @Value("${external-api.jsonplaceholder.connect-timeout:5s}") Duration connectTimeout,
+        @Value("${external-api.jsonplaceholder.read-timeout:10s}") Duration readTimeout,
+        ObservationRegistry observationRegistry
+    ) {
+        ClientHttpRequestFactorySettings settings = ClientHttpRequestFactorySettings.DEFAULTS
+            .withConnectTimeout(connectTimeout)
+            .withReadTimeout(readTimeout);
+
+        return RestClient.builder()
+            .baseUrl(baseUrl)
+            .requestFactory(ClientHttpRequestFactories.get(settings))
+            .defaultHeader("Content-Type", "application/json")
+            .observationRegistry(observationRegistry)  // Para métricas y tracing
+            .build();
+    }
+}
+```
+
+**Configuración en application.yaml:**
+```yaml
+external-api:
+  jsonplaceholder:
+    base-url: https://jsonplaceholder.typicode.com
+    connect-timeout: 5s
+    read-timeout: 10s
+```
+
+#### 3. Implementar el Adapter (Infrastructure Layer)
+
+```java
+// infrastructure/http/client/JsonPlaceholderClient.java
+@Component
+public class JsonPlaceholderClient implements ExternalUserApiClient {
+
+    private final RestClient restClient;
+
+    public JsonPlaceholderClient(
+        @Qualifier("jsonPlaceholderRestClient") RestClient restClient
+    ) {
+        this.restClient = restClient;
+    }
+
+    @Override
+    public Optional<ExternalUserData> getUserById(Integer externalUserId) {
+        try {
+            JsonPlaceholderUserResponse response = restClient.get()
+                .uri("/users/{id}", externalUserId)
+                .retrieve()
+                .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
+                    logger.warn("User not found: {}", externalUserId);
+                })
+                .body(JsonPlaceholderUserResponse.class);
+
+            if (response == null) {
+                return Optional.empty();
+            }
+
+            // Mapear de Infrastructure DTO → Application DTO
+            return Optional.of(mapToExternalUserData(response));
+
+        } catch (RestClientException e) {
+            logger.error("Error calling external API: {}", e.getMessage());
+            return Optional.empty();  // Manejo graceful
+        }
+    }
+}
+```
+
+#### 4. DTOs de Infrastructure
+
+```java
+// infrastructure/http/client/dto/JsonPlaceholderUserResponse.java
+@JsonIgnoreProperties(ignoreUnknown = true)
+public record JsonPlaceholderUserResponse(
+    Integer id,
+    String name,
+    String username,
+    String email,
+    String phone,
+    String website
+) {
+}
+```
+
+**Nota importante:** Este DTO es diferente del `ExternalUserData` del puerto. Esto permite:
+- Evolucionar el contrato de Application independientemente de la API externa
+- Adaptarse a cambios de la API sin romper Application
+- Usar diferentes APIs externas con el mismo puerto
+
+#### 5. Usar en Application Service
+
+```java
+// application/service/CreateUserService.java
+@Service
+@Transactional
+public class CreateUserService implements CreateUserUseCase {
+
+    private final ExternalUserApiClient externalUserApiClient;
+
+    @Override
+    public UserResult execute(CreateUserCommand command) {
+        // Obtener datos de enriquecimiento de API externa
+        ExternalUserData externalData = externalUserApiClient
+            .getUserById(1)
+            .orElse(ExternalUserData.empty());
+
+        if (!externalData.isEmpty()) {
+            log.info("External data fetched: {}", externalData.username());
+        }
+
+        // Continuar con la lógica de negocio...
+    }
+}
+```
+
+### Tecnologías para REST Clients
+
+| Tecnología | Pros | Contras | Cuándo usar |
+|------------|------|---------|-------------|
+| **RestClient** (Spring 6+) | ✅ Moderno, sincrónico<br/>✅ No requiere deps adicionales<br/>✅ API fluida | ⚠️ Solo desde Spring 6.1 | ✅ Proyectos Spring Boot 3.2+ |
+| **RestTemplate** | ✅ Maduro y estable<br/>✅ Ampliamente conocido | ⚠️ Deprecated (maintenance mode) | ⚠️ Solo en proyectos legacy |
+| **WebClient** | ✅ Reactivo (non-blocking)<br/>✅ Mejor performance | ❌ Más complejo<br/>❌ Requiere programación reactiva | ✅ Apps reactivas con WebFlux |
+| **Feign (OpenFeign)** | ✅ Declarativo (solo interfaces)<br/>✅ Muy simple | ❌ Dependencia adicional<br/>⚠️ Menos control sobre HTTP | ✅ APIs REST simples y estables |
+
+### Mejores Prácticas
+
+#### 1. Timeouts
+```yaml
+external-api:
+  jsonplaceholder:
+    connect-timeout: 5s   # Tiempo para establecer conexión
+    read-timeout: 10s     # Tiempo para recibir respuesta
+```
+
+#### 2. Manejo de Errores
+
+```java
+try {
+    return externalUserApiClient.getUserById(id)
+        .orElse(ExternalUserData.empty());
+} catch (Exception e) {
+    logger.warn("External API failed, continuing without enrichment");
+    return ExternalUserData.empty();  // Degradación graceful
+}
+```
+
+**Regla:** Si el dato externo NO es crítico, maneja el error gracefully y continúa.
+
+#### 3. Circuit Breaker (Resilience4j)
+
+```java
+@Component
+public class JsonPlaceholderClient implements ExternalUserApiClient {
+
+    @CircuitBreaker(name = "jsonPlaceholder", fallbackMethod = "getUserByIdFallback")
+    @Override
+    public Optional<ExternalUserData> getUserById(Integer id) {
+        // Llamada a API externa
+    }
+
+    private Optional<ExternalUserData> getUserByIdFallback(Integer id, Exception ex) {
+        logger.warn("Circuit breaker activated for getUserById({})", id);
+        return Optional.empty();
+    }
+}
+```
+
+#### 4. Retry con Backoff
+
+```yaml
+resilience4j:
+  retry:
+    instances:
+      jsonPlaceholder:
+        max-attempts: 3
+        wait-duration: 1s
+        exponential-backoff-multiplier: 2
+```
+
+#### 5. Logging y Observability
+
+```java
+RestClient.builder()
+    .baseUrl(baseUrl)
+    .observationRegistry(observationRegistry)  // Micrometer
+    .requestInterceptor((request, body, execution) -> {
+        logger.debug("→ {} {}", request.getMethod(), request.getURI());
+        var response = execution.execute(request, body);
+        logger.debug("← {} {}", response.getStatusCode(), request.getURI());
+        return response;
+    })
+    .build();
+```
+
+### Testing de REST Clients
+
+#### Opción 1: Mock del Output Port (Unit Test)
+
+```java
+@Test
+void shouldCreateUser_withExternalData() {
+    // Mock del port
+    ExternalUserData mockData = new ExternalUserData(1, "John", ...);
+    when(externalUserApiClient.getUserById(anyInt()))
+        .thenReturn(Optional.of(mockData));
+
+    // Test del service
+    UserResult result = createUserService.execute(command);
+
+    assertThat(result).isNotNull();
+}
+```
+
+#### Opción 2: WireMock (Integration Test)
+
+```java
+@WireMockTest
+class JsonPlaceholderClientIntegrationTest {
+
+    @Test
+    void shouldFetchUser_whenApiReturns200(WireMockRuntimeInfo wmInfo) {
+        // Configurar WireMock
+        stubFor(get("/users/1")
+            .willReturn(okJson("{\"id\":1,\"name\":\"John\"}")));
+
+        // Crear RestClient apuntando a WireMock
+        RestClient restClient = RestClient.builder()
+            .baseUrl(wmInfo.getHttpBaseUrl())
+            .build();
+
+        JsonPlaceholderClient client = new JsonPlaceholderClient(restClient);
+
+        // Test
+        Optional<ExternalUserData> result = client.getUserById(1);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().name()).isEqualTo("John");
+    }
+}
+```
+
+### Estructura de Archivos
+
+```
+user/
+├── application/
+│   └── port/
+│       └── ExternalUserApiClient.java      ← Output Port (interface + DTO)
+└── infrastructure/
+    ├── config/
+    │   └── RestClientConfig.java           ← Configuración de RestClient
+    └── http/
+        └── client/
+            ├── JsonPlaceholderClient.java  ← Implementación del port
+            └── dto/
+                ├── JsonPlaceholderUserResponse.java
+                └── JsonPlaceholderCreateUserRequest.java
+```
+
+### Resumen
+
+| Aspecto | Solución |
+|---------|----------|
+| **¿Dónde?** | Output Port en Application, Adapter en Infrastructure |
+| **¿Tecnología?** | RestClient (Spring 6+), WebClient (reactivo), o Feign |
+| **¿Timeouts?** | Configurables en application.yaml (connect: 5s, read: 10s) |
+| **¿Errores?** | Manejo graceful (Optional.empty() o fallback) |
+| **¿Resiliencia?** | Circuit Breaker + Retry (Resilience4j) |
+| **¿Testing?** | Mock en unit tests, WireMock en integration tests |
+
+---
+
 ## Flujo Completo Paso a Paso
 
 ### Ejemplo: Crear un Usuario

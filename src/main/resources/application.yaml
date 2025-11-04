@@ -370,3 +370,27 @@ cors:
   #
   # ⚠️ NUNCA usar "*" (wildcard) en producción con credentials
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200,http://localhost:8081}
+
+# ===================================================================
+# EXTERNAL APIs CONFIGURATION
+# ===================================================================
+# Configuración para integración con APIs REST externas
+#
+# Este ejemplo demuestra cómo configurar clientes HTTP para APIs externas
+# siguiendo arquitectura hexagonal (Output Adapters)
+external-api:
+  # JSONPlaceholder API (https://jsonplaceholder.typicode.com)
+  # API pública para testing y prototyping
+  jsonplaceholder:
+    # URL base de la API
+    base-url: ${JSONPLACEHOLDER_API_URL:https://jsonplaceholder.typicode.com}
+
+    # Timeout de conexión (tiempo para establecer conexión TCP)
+    # DESARROLLO: 5s es suficiente
+    # PRODUCCIÓN: ajustar según latencia de la API externa
+    connect-timeout: ${JSONPLACEHOLDER_CONNECT_TIMEOUT:5s}
+
+    # Timeout de lectura (tiempo para recibir respuesta completa)
+    # DESARROLLO: 10s es suficiente
+    # PRODUCCIÓN: ajustar según tiempo de respuesta esperado de la API
+    read-timeout: ${JSONPLACEHOLDER_READ_TIMEOUT:10s}
