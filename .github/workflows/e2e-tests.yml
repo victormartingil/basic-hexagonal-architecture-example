@@ -9,34 +9,34 @@ name: E2E Tests (Testcontainers + Docker Compose)
 # - MODO DOCKER: docker-compose completo (más realista)
 #
 # TRIGGERS CONFIGURADOS:
-# ✅ Pull Requests a main (modo LOCAL)
-# ✅ Push a main (modo LOCAL) - después de merge
-# ✅ Manual desde GitHub UI (ambos modos)
+# ✅ Manual desde GitHub UI (ambos modos) - ÚNICO TRIGGER ACTIVO
+# ❌ Pull Requests a main (desactivado)
+# ❌ Push a main (desactivado)
 # ❌ Scheduled (desactivado)
 #
 # ⚠️ IMPORTANTE - LÍMITES DE GITHUB ACTIONS:
 # - GitHub Free: 2000 minutos/mes (repos privados), ilimitado (públicos)
 # - Este workflow consume ~8-10 minutos por ejecución
-# - Levanta docker-compose completo (PostgreSQL, Kafka, Zipkin, etc.)
+# - Se ejecuta solo manualmente para ahorrar minutos
 #
 # ============================================================================
 # CÓMO ACTIVAR/DESACTIVAR ESTE WORKFLOW:
 # ============================================================================
 #
-# OPCIÓN 1: Solo manual (ACTUAL - Recomendado)
+# OPCIÓN 1: Solo manual (ACTIVADO ✅ - Recomendado)
 # ✅ Ejecutar solo cuando lo necesites desde GitHub UI
 # ✅ No consume minutos automáticamente
 # ✅ Ideal para validación antes de releases
 #
-# OPCIÓN 2: Automático en Pull Requests (ACTIVADO ✅)
-# Se ejecuta automáticamente en PRs a main
+# OPCIÓN 2: Automático en Pull Requests (DESACTIVADO ❌)
+# Para activar, descomenta las líneas marcadas con [AUTO-PR]
 # ⚠️ Consumirá ~5 minutos en cada PR (modo LOCAL)
 #
-# OPCIÓN 3: Automático en Push a Main (DESACTIVADO)
+# OPCIÓN 3: Automático en Push a Main (DESACTIVADO ❌)
 # Para activar, descomenta las líneas marcadas con [AUTO-MAIN]
 # ⚠️ Consumirá minutos en cada push a main
 #
-# OPCIÓN 4: Scheduled (DESACTIVADO)
+# OPCIÓN 4: Scheduled (DESACTIVADO ❌)
 # Para activar, descomenta las líneas marcadas con [SCHEDULED]
 # ⚠️ Consumirá minutos semanalmente
 # ============================================================================
@@ -61,22 +61,24 @@ on:
         default: false
         type: boolean
 
-  # ✅ ACTIVADO: Ejecutar en Pull Requests
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'src/**'
-      - 'pom.xml'
-      - 'docker-compose.yml'
-      - '.github/workflows/e2e-tests.yml'
+  # ❌ DESACTIVADO: Ejecutar en Pull Requests
+  # [AUTO-PR] Descomenta las siguientes líneas para activar:
+  # pull_request:
+  #   branches: [ main ]
+  #   paths:
+  #     - 'src/**'
+  #     - 'pom.xml'
+  #     - 'docker-compose.yml'
+  #     - '.github/workflows/e2e-tests.yml'
 
-  # ✅ ACTIVADO: Ejecutar en Push a Main (después de merge)
-  push:
-    branches: [ main ]
-    paths:
-      - 'src/**'
-      - 'pom.xml'
-      - '.github/workflows/e2e-tests.yml'
+  # ❌ DESACTIVADO: Ejecutar en Push a Main (después de merge)
+  # [AUTO-MAIN] Descomenta las siguientes líneas para activar:
+  # push:
+  #   branches: [ main ]
+  #   paths:
+  #     - 'src/**'
+  #     - 'pom.xml'
+  #     - '.github/workflows/e2e-tests.yml'
 
   # ❌ DESACTIVADO: Ejecutar semanalmente
   # [SCHEDULED] Descomenta las siguientes líneas para activar:
@@ -268,10 +270,16 @@ jobs:
 #    - Seleccionar modo: local o docker
 #    - Opcional: Skip infrastructure startup si ya está corriendo
 #
-# 4. RECOMENDACIONES:
+# 4. ESTADO ACTUAL:
+#    ✅ Ejecución MANUAL únicamente (workflow_dispatch)
+#    ❌ NO se ejecuta automáticamente en PRs
+#    ❌ NO se ejecuta automáticamente en push a main
+#    ❌ NO se ejecuta en schedule
+#
+# 5. RECOMENDACIONES:
 #    - Usar Local Mode para testing rápido
 #    - Usar Docker Mode para validación completa antes de releases
-#    - Mantener desactivado el trigger automático para ahorrar minutos
-#    - Activar solo cuando sea necesario (antes de releases importantes)
+#    - Ejecutar manualmente antes de releases importantes
+#    - Los tests de integración (integration-tests.yml) sí se ejecutan automáticamente
 #
 # ============================================================================
