@@ -385,12 +385,15 @@ external-api:
     # URL base de la API
     base-url: ${JSONPLACEHOLDER_API_URL:https://jsonplaceholder.typicode.com}
 
-    # Timeout de conexión (tiempo para establecer conexión TCP)
-    # DESARROLLO: 5s es suficiente
+    # Timeouts para RestClient (Duration format: 5s, 10s, etc.)
+    # DESARROLLO: 5s / 10s es suficiente
     # PRODUCCIÓN: ajustar según latencia de la API externa
     connect-timeout: ${JSONPLACEHOLDER_CONNECT_TIMEOUT:5s}
-
-    # Timeout de lectura (tiempo para recibir respuesta completa)
-    # DESARROLLO: 10s es suficiente
-    # PRODUCCIÓN: ajustar según tiempo de respuesta esperado de la API
     read-timeout: ${JSONPLACEHOLDER_READ_TIMEOUT:10s}
+
+    # Timeouts para FeignClient (milisegundos)
+    # Nota: FeignClient usa configuración separada porque se ejecuta en un contexto
+    # donde la conversión automática de Duration no funciona
+    feign:
+      connect-timeout-ms: ${JSONPLACEHOLDER_FEIGN_CONNECT_TIMEOUT_MS:5000}
+      read-timeout-ms: ${JSONPLACEHOLDER_FEIGN_READ_TIMEOUT_MS:10000}

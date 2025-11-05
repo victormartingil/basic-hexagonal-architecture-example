@@ -1,8 +1,8 @@
 package com.example.hexarch.user.infrastructure.http.client;
 
 import com.example.hexarch.user.application.port.ExternalUserApiClient;
-import com.example.hexarch.user.infrastructure.http.client.dto.JsonPlaceholderCreateUserRequest;
-import com.example.hexarch.user.infrastructure.http.client.dto.JsonPlaceholderUserResponse;
+import com.example.hexarch.user.infrastructure.http.client.dto.ExternalUserApiCreateRequest;
+import com.example.hexarch.user.infrastructure.http.client.dto.ExternalUserApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -14,10 +14,38 @@ import org.springframework.web.client.RestClientException;
 import java.util.Optional;
 
 /**
- * Implementación del Output Port ExternalUserApiClient usando Spring RestClient.
+ * Implementación del Output Port ExternalUserApiClient usando Spring RestClient (IMPERATIVO).
  * <p>
  * Este adaptador integra con la API pública JSONPlaceholder para demostrar
- * cómo conectar con APIs REST externas siguiendo arquitectura hexagonal.
+ * cómo conectar con APIs REST externas usando RestClient (control total, código explícito).
+ * </p>
+ *
+ * <h3>🎯 Tres Opciones en Este Proyecto (2025):</h3>
+ * <p>
+ * Este proyecto implementa TRES opciones para comparar:
+ * <ul>
+ *   <li><strong>ExternalUserApiHttpInterfaceAdapter</strong> (⭐ RECOMENDADO): Cliente DECLARATIVO nativo de Spring 6</li>
+ *   <li><strong>ExternalUserApiRestClient</strong> (esta clase): Cliente IMPERATIVO con control total</li>
+ *   <li><strong>ExternalUserApiFeignClient</strong>: Cliente DECLARATIVO tradicional (⚠️ maintenance mode)</li>
+ * </ul>
+ * </p>
+ * <p>
+ * <strong>Usa RestClient cuando</strong>:
+ * <ul>
+ *   <li>✅ Necesitas control TOTAL sobre HTTP requests</li>
+ *   <li>✅ Debugging intensivo es crítico</li>
+ *   <li>✅ APIs complejas o no estándar</li>
+ *   <li>✅ Prefieres código imperativo explícito</li>
+ * </ul>
+ * </p>
+ * <p>
+ * <strong>Usa HTTP Interface en lugar de RestClient cuando</strong>:
+ * <ul>
+ *   <li>✅ Prefieres código declarativo (menos líneas)</li>
+ *   <li>✅ API REST estándar</li>
+ *   <li>✅ Múltiples endpoints del mismo servicio</li>
+ * </ul>
+ * Por defecto se usa <strong>FeignClient</strong> (@Primary) por compatibilidad, pero considera HTTP Interface.
  * </p>
  *
  * <h3>Arquitectura Hexagonal:</h3>
@@ -28,6 +56,20 @@ import java.util.Optional;
  *   <li>Puede ser reemplazado por otra implementación sin afectar Application/Domain</li>
  * </ul>
  *
+ * <h3>Ventajas de RestClient:</h3>
+ * <ul>
+ *   <li>✅ Control total sobre HTTP requests/responses</li>
+ *   <li>✅ Debugging fácil (código explícito)</li>
+ *   <li>✅ Sin dependencias adicionales</li>
+ *   <li>✅ Performance óptimo</li>
+ * </ul>
+ *
+ * <h3>Desventajas de RestClient:</h3>
+ * <ul>
+ *   <li>❌ Más código boilerplate</li>
+ *   <li>❌ Más trabajo para APIs con muchos endpoints</li>
+ * </ul>
+ *
  * <h3>Manejo de Errores:</h3>
  * <ul>
  *   <li>404: Retorna Optional.empty()</li>
@@ -35,21 +77,16 @@ import java.util.Optional;
  *   <li>Timeout: Configurado en RestClientConfig</li>
  * </ul>
  *
- * <h3>Mejoras posibles (para producción):</h3>
- * <ul>
- *   <li>Añadir Circuit Breaker (@CircuitBreaker de Resilience4j)</li>
- *   <li>Añadir Retry con backoff exponencial</li>
- *   <li>Añadir cache para reducir llamadas externas</li>
- *   <li>Añadir métricas customizadas</li>
- * </ul>
- *
  * @see ExternalUserApiClient
+ * @see ExternalUserApiHttpInterfaceAdapter - Opción RECOMENDADA (declarativo, nativo)
+ * @see ExternalUserApiFeignClient - Opción legacy (maintenance mode)
  * @see com.example.hexarch.user.infrastructure.config.RestClientConfig
  */
-@Component
-public class JsonPlaceholderClient implements ExternalUserApiClient {
+@Component("jsonPlaceholderRestClientAdapter")
+@Qualifier("restClient")
+public class ExternalUserApiRestClient implements ExternalUserApiClient {
 
-    private static final Logger logger = LoggerFactory.getLogger(JsonPlaceholderClient.class);
+    private static final Logger logger = LoggerFactory.getLogger(ExternalUserApiRestClient.class);
 
     private final RestClient restClient;
 
@@ -58,9 +95,9 @@ public class JsonPlaceholderClient implements ExternalUserApiClient {
      *
      * @param restClient RestClient bean configurado en RestClientConfig
      */
-    public JsonPlaceholderClient(@Qualifier("jsonPlaceholderRestClient") RestClient restClient) {
+    public ExternalUserApiRestClient(@Qualifier("jsonPlaceholderRestClient") RestClient restClient) {
         this.restClient = restClient;
-        logger.info("✅ JsonPlaceholderClient initialized");
+        logger.info("✅ ExternalUserApiRestClient (RestClient implementation) initialized");
     }
 
     /**
@@ -77,7 +114,7 @@ public class JsonPlaceholderClient implements ExternalUserApiClient {
         logger.info("📡 [EXTERNAL API] Fetching user from JSONPlaceholder API - userId: {}", externalUserId);
 
         try {
-            JsonPlaceholderUserResponse response = restClient.get()
+            ExternalUserApiResponse response = restClient.get()
                     .uri("/users/{id}", externalUserId)
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (request, httpResponse) -> {
@@ -87,7 +124,7 @@ public class JsonPlaceholderClient implements ExternalUserApiClient {
                     .onStatus(HttpStatusCode::is5xxServerError, (request, httpResponse) -> {
                         logger.error("❌ [EXTERNAL API] JSONPlaceholder API error - status: {}", httpResponse.getStatusCode());
                     })
-                    .body(JsonPlaceholderUserResponse.class);
+                    .body(ExternalUserApiResponse.class);
 
             if (response == null) {
                 logger.warn("⚠️ [EXTERNAL API] Received null response from JSONPlaceholder");
@@ -123,16 +160,16 @@ public class JsonPlaceholderClient implements ExternalUserApiClient {
         logger.info("📤 [EXTERNAL API] Creating user in JSONPlaceholder API - name: {}, email: {}", name, email);
 
         try {
-            JsonPlaceholderCreateUserRequest request = new JsonPlaceholderCreateUserRequest(name, email);
+            ExternalUserApiCreateRequest request = new ExternalUserApiCreateRequest(name, email);
 
-            JsonPlaceholderUserResponse response = restClient.post()
+            ExternalUserApiResponse response = restClient.post()
                     .uri("/users")
                     .body(request)
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (req, httpResponse) -> {
                         logger.error("❌ [EXTERNAL API] Failed to create user - status: {}", httpResponse.getStatusCode());
                     })
-                    .body(JsonPlaceholderUserResponse.class);
+                    .body(ExternalUserApiResponse.class);
 
             if (response == null) {
                 logger.error("❌ [EXTERNAL API] Received null response when creating user");
@@ -150,7 +187,7 @@ public class JsonPlaceholderClient implements ExternalUserApiClient {
     }
 
     /**
-     * Mapea el DTO de Infrastructure (JsonPlaceholderUserResponse)
+     * Mapea el DTO de Infrastructure (ExternalUserApiResponse)
      * al DTO de Application (ExternalUserData).
      * <p>
      * Este mapping aísla la capa de Application de los cambios en la API externa.
@@ -159,7 +196,7 @@ public class JsonPlaceholderClient implements ExternalUserApiClient {
      * @param response Response de JSONPlaceholder
      * @return ExternalUserData para Application layer
      */
-    private ExternalUserData mapToExternalUserData(JsonPlaceholderUserResponse response) {
+    private ExternalUserData mapToExternalUserData(ExternalUserApiResponse response) {
         return new ExternalUserData(
                 response.id(),
                 response.name(),

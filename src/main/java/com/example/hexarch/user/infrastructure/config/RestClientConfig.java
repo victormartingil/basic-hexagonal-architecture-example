@@ -4,11 +4,9 @@ import io.micrometer.observation.ObservationRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.web.client.ClientHttpRequestFactories;
-import org.springframework.boot.web.client.ClientHttpRequestFactorySettings;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
@@ -24,6 +22,77 @@ import java.time.Duration;
  *   <li>Logging de requests/responses</li>
  *   <li>Observability con Micrometer</li>
  * </ul>
+ * </p>
+ *
+ * <h3>🎯 RestClient: Backend para HTTP Interface y Uso Directo</h3>
+ * <p>
+ * Este RestClient configurado sirve para <strong>DOS propósitos</strong>:
+ * </p>
+ * <ol>
+ *   <li><strong>Backend de HTTP Interface</strong> (⭐ RECOMENDADO):
+ *       <ul>
+ *         <li>HTTP Interface usa este RestClient para hacer llamadas HTTP reales</li>
+ *         <li>Configurado en HttpInterfaceConfig</li>
+ *         <li>Opción declarativa moderna</li>
+ *       </ul>
+ *   </li>
+ *   <li><strong>Uso directo imperativo</strong> (para control total):
+ *       <ul>
+ *         <li>ExternalUserApiRestClient usa este bean directamente</li>
+ *         <li>Control total sobre cada request</li>
+ *         <li>Mejor para debugging y casos complejos</li>
+ *       </ul>
+ *   </li>
+ * </ol>
+ * <p>
+ * <strong>Por qué RestClient (Spring 6.1+)</strong>:
+ * <ul>
+ *   <li><strong>Moderno</strong>: API fluida y expresiva (mejor que RestTemplate)</li>
+ *   <li><strong>Sin dependencias extra</strong>: Incluido en Spring Boot 3.2+</li>
+ *   <li><strong>Síncrono</strong>: Código simple y directo para casos de uso no reactivos</li>
+ *   <li><strong>Observability</strong>: Soporte nativo para Micrometer tracing</li>
+ *   <li><strong>Reemplazo oficial</strong>: Spring recomienda migrar de RestTemplate a RestClient</li>
+ * </ul>
+ * </p>
+ *
+ * <h3>📊 Comparación con Alternativas:</h3>
+ * <table border="1">
+ *   <tr>
+ *     <th>Cliente</th>
+ *     <th>Estado</th>
+ *     <th>Notas</th>
+ *   </tr>
+ *   <tr>
+ *     <td><strong>HTTP Interface</strong></td>
+ *     <td>✅ Activo, recomendado</td>
+ *     <td>Usa RestClient como backend. Opción declarativa moderna</td>
+ *   </tr>
+ *   <tr>
+ *     <td><strong>RestClient</strong></td>
+ *     <td>✅ Activo (este config)</td>
+ *     <td>Backend de HTTP Interface y uso directo</td>
+ *   </tr>
+ *   <tr>
+ *     <td><strong>FeignClient</strong></td>
+ *     <td>⚠️ Maintenance Mode</td>
+ *     <td>Requiere dependencia adicional. Solo recomendado para Spring Cloud</td>
+ *   </tr>
+ *   <tr>
+ *     <td><strong>WebClient</strong></td>
+ *     <td>✅ Activo</td>
+ *     <td>Overkill para este proyecto. Solo si necesitas reactividad (Mono/Flux)</td>
+ *   </tr>
+ *   <tr>
+ *     <td><strong>RestTemplate</strong></td>
+ *     <td>⚠️ Maintenance Mode</td>
+ *     <td>Legacy. Spring recomienda migrar a RestClient</td>
+ *   </tr>
+ * </table>
+ *
+ * <h3>📚 Para aprender más:</h3>
+ * <p>
+ * Ver guía completa: <code>docs/18-HTTP-Clients-Comparison-Guide.md</code><br/>
+ * Compara RestClient, RestTemplate, WebClient y FeignClient con ejemplos de código.
  * </p>
  *
  * <h3>Arquitectura Hexagonal:</h3>
@@ -43,7 +112,9 @@ import java.time.Duration;
  * </pre>
  *
  * @see RestClient
- * @see com.example.hexarch.user.infrastructure.http.client.JsonPlaceholderClient
+ * @see HttpInterfaceConfig - Usa este RestClient como backend (RECOMENDADO)
+ * @see com.example.hexarch.user.infrastructure.http.client.ExternalUserApiRestClient - Uso directo
+ * @see <a href="https://docs.spring.io/spring-framework/reference/integration/rest-clients.html#rest-restclient">Spring RestClient Documentation</a>
  */
 @Configuration
 public class RestClientConfig {
@@ -53,7 +124,8 @@ public class RestClientConfig {
     /**
      * Crea un RestClient configurado para la API de JSONPlaceholder.
      * <p>
-     * Este bean se inyecta en JsonPlaceholderClient para realizar las peticiones HTTP.
+     * Este bean se inyecta en ExternalUserApiRestClient para realizar las peticiones HTTP.
+     * Usado cuando se quiere la implementación con RestClient (imperativa, control total).
      * </p>
      *
      * @param baseUrl             URL base de la API externa
@@ -74,12 +146,11 @@ public class RestClientConfig {
         logger.info("   Connect Timeout: {}", connectTimeout);
         logger.info("   Read Timeout: {}", readTimeout);
 
-        // Configurar timeouts
-        ClientHttpRequestFactorySettings settings = ClientHttpRequestFactorySettings.DEFAULTS
-                .withConnectTimeout(connectTimeout)
-                .withReadTimeout(readTimeout);
-
-        ClientHttpRequestFactory requestFactory = ClientHttpRequestFactories.get(settings);
+        // Configurar timeouts usando SimpleClientHttpRequestFactory (no deprecado)
+        // Reemplaza ClientHttpRequestFactorySettings (deprecado en Spring Boot 3.4+)
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(connectTimeout);
+        requestFactory.setReadTimeout(readTimeout);
 
         // Crear RestClient con configuración
         RestClient restClient = RestClient.builder()

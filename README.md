@@ -113,8 +113,8 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
 - **🔧 Spring Boot 3.5**: Java 21, Records, Lombok, MapStruct
 
 ### **📚 Documentación Extensa**
-- **7000+ líneas de documentación técnica**: Guías detalladas con ejemplos prácticos
-- **16 guías completas**: Desde conceptos básicos hasta patrones avanzados
+- **8000+ líneas de documentación técnica**: Guías detalladas con ejemplos prácticos
+- **18 guías completas**: Desde conceptos básicos hasta patrones avanzados
 - **📖 Ejemplos de código comentados**: Explicaciones inline del "por qué"
 - **🎓 Rutas de aprendizaje**: Por nivel (Junior, Mid, Senior)
 
@@ -233,9 +233,21 @@ Este proyecto está diseñado como **plantilla y tutorial exhaustivo** para desa
     - Herramientas: Pact, Spring Cloud Contract
     - Ejemplos prácticos
 
+17. **[17-JaCoCo-Coverage-Guide.md](docs/17-JaCoCo-Coverage-Guide.md)** - 📊 Guía de Cobertura con JaCoCo
+    - Configuración de JaCoCo en Maven
+    - Métricas de cobertura
+    - Exclusiones y configuración avanzada
+
+18. **[18-HTTP-Clients-Comparison-Guide.md](docs/18-HTTP-Clients-Comparison-Guide.md)** - 🌐 **Comparación de HTTP Clients**
+    - **RestClient vs RestTemplate vs WebClient vs FeignClient**
+    - Cuándo usar cada uno
+    - Ejemplos de código lado a lado
+    - Migración de RestTemplate a RestClient
+    - **¿Por qué este proyecto usa RestClient?**
+
 ### **🤖 Para Desarrolladores con IA**
 
-17. **[.ai-guidelines.md](.ai-guidelines.md)** - Guidelines para GitHub Copilot, Cursor, Claude
+19. **[.ai-guidelines.md](.ai-guidelines.md)** - Guidelines para GitHub Copilot, Cursor, Claude
     - Reglas arquitecturales obligatorias
     - Nomenclatura exacta a seguir
     - Patrones de implementación

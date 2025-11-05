@@ -66,9 +66,29 @@ public class CreateUserService implements CreateUserUseCase {
      * Spring inyecta automáticamente las implementaciones de las interfaces.
      * No usamos @Autowired porque la inyección por constructor es preferida.
      *
+     * <h3>🎯 Implementación de ExternalUserApiClient:</h3>
+     * <p>
+     * Por defecto se inyecta <strong>ExternalUserApiFeignClient</strong> (@Primary).
+     * </p>
+     * <p>
+     * Para cambiar a RestClient, usa @Qualifier:
+     * <pre>{@code
+     * public CreateUserService(
+     *     UserRepository userRepository,
+     *     UserEventPublisher userEventPublisher,
+     *     @Qualifier("restClient") ExternalUserApiClient externalUserApiClient,
+     *     MeterRegistry meterRegistry,
+     *     @Value("${ENVIRONMENT:local}") String environment
+     * ) { ... }
+     * }</pre>
+     * </p>
+     * <p>
+     * Ver documentación: docs/19-Beans-and-Qualifiers-Guide.md
+     * </p>
+     *
      * @param userRepository repositorio para persistir usuarios
      * @param userEventPublisher publicador para eventos de usuarios
-     * @param externalUserApiClient cliente para integración con API externa (ejemplo didáctico)
+     * @param externalUserApiClient cliente para integración con API externa (FeignClient por defecto)
      * @param meterRegistry registro de métricas de Micrometer para observability
      * @param environment entorno actual (local, dev, prod) para tags de métricas
      */

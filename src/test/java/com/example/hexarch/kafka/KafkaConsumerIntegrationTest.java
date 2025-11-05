@@ -106,6 +106,11 @@ class KafkaConsumerIntegrationTest {
     private KafkaTemplate<String, UserCreatedEvent> kafkaTemplate;
 
     // ✅ EmailService - Para verificar que el Consumer llama al servicio correctamente
+    // ⚠️ @SpyBean está deprecado en Spring Boot 3.4+ (marcado para eliminación)
+    // ALTERNATIVA MODERNA: Inyectar el bean real con @Autowired y usar Mockito.spy() en @BeforeEach
+    // TODO: Migrar a la nueva forma cuando se actualice a Spring Boot 3.6+
+    // Ver: https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-3.4-Release-Notes
+    @SuppressWarnings("deprecation")  // Suprimir warning hasta migración completa
     @SpyBean
     private EmailService emailService;
 

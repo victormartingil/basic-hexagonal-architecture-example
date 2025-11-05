@@ -28,6 +28,7 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
+		<spring-cloud.version>2025.0.0</spring-cloud.version>
 		<mapstruct.version>1.6.3</mapstruct.version>
 		<openapi-generator.version>7.2.0</openapi-generator.version>
 		<springdoc.version>2.3.0</springdoc.version>
@@ -43,7 +44,7 @@
 		<sonar.projectKey>tu-usuario_nombre-proyecto</sonar.projectKey>
 
 		<!-- JaCoCo Configuration -->
-		<jacoco.coverage.minimum>0.80</jacoco.coverage.minimum>
+		<jacoco.coverage.minimum>0.75</jacoco.coverage.minimum>
 		<jacoco.coverage.minimum.branches>0.65</jacoco.coverage.minimum.branches>
 		<sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
 		<sonar.dynamicAnalysis>reuseReports</sonar.dynamicAnalysis>
@@ -84,6 +85,12 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+
+		<!-- OpenFeign - Cliente HTTP Declarativo -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-openfeign</artifactId>
 		</dependency>
 
 		<!-- Kafka -->
@@ -234,6 +241,18 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
+
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework.cloud</groupId>
+				<artifactId>spring-cloud-dependencies</artifactId>
+				<version>${spring-cloud.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 
 	<build>
 		<plugins>

@@ -44,10 +44,16 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Run all tests (including integration tests)
-        run: ./mvnw test -Pintegration-tests
+        run: ./mvnw test -Pintegration-tests -Dtest="!JsonPlaceholderRestClientRealIntegrationTest,!JsonPlaceholderFeignClientRealIntegrationTest"
         env:
           # Testcontainers necesita acceso al Docker daemon
           TESTCONTAINERS_RYUK_DISABLED: false
+          # Excluir tests que hacen llamadas HTTP reales a APIs externas
+          # JsonPlaceholderRestClientRealIntegrationTest y JsonPlaceholderFeignClientRealIntegrationTest se excluyen porque:
+          # - Hacen llamadas reales a https://jsonplaceholder.typicode.com
+          # - Pueden fallar si GitHub Actions bloquea conexiones externas
+          # - Pueden fallar si la API externa está caída
+          # - Ya existen JsonPlaceholderRestClientTest y JsonPlaceholderFeignClientTest que validan la lógica
 
       - name: Upload test results
         if: always()
