@@ -13,6 +13,7 @@ import com.example.hexarch.user.domain.model.User;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -95,7 +96,7 @@ public class CreateUserService implements CreateUserUseCase {
     public CreateUserService(
             UserRepository userRepository,
             UserEventPublisher userEventPublisher,
-            ExternalUserApiClient externalUserApiClient,
+            @Qualifier("httpInterface") ExternalUserApiClient externalUserApiClient,
             MeterRegistry meterRegistry,
             @Value("${ENVIRONMENT:local}") String environment
     ) {

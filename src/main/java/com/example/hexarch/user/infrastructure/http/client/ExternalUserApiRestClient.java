@@ -120,9 +120,11 @@ public class ExternalUserApiRestClient implements ExternalUserApiClient {
                     .onStatus(HttpStatusCode::is4xxClientError, (request, httpResponse) -> {
                         logger.warn("⚠️ [EXTERNAL API] User not found in JSONPlaceholder - userId: {}, status: {}",
                                 externalUserId, httpResponse.getStatusCode());
+                        throw new RestClientException("User not found: " + externalUserId);
                     })
                     .onStatus(HttpStatusCode::is5xxServerError, (request, httpResponse) -> {
                         logger.error("❌ [EXTERNAL API] JSONPlaceholder API error - status: {}", httpResponse.getStatusCode());
+                        throw new RestClientException("Server error: " + httpResponse.getStatusCode());
                     })
                     .body(ExternalUserApiResponse.class);
 

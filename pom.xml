@@ -36,7 +36,8 @@
 		<karate.version>1.5.0</karate.version>
 
 		<!-- Code Quality -->
-		<jacoco.version>0.8.12</jacoco.version>
+
+		<jacoco.version>0.8.13</jacoco.version>
 		<!-- SonarCloud (OPCIONAL - Solo si lo configuras en GitHub Secrets) -->
 		<!-- Obtén estos valores de https://sonarcloud.io después de crear tu proyecto -->
 		<sonar.organization>tu-organizacion-sonarcloud</sonar.organization>

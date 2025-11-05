@@ -100,7 +100,7 @@ public class KarateE2EDockerTest {
         System.setProperty("karate.env", "docker");
 
         // Ejecuta todos los .feature files del subdirectorio user
-        return Karate.run("user").relativeTo(getClass());
+        return Karate.run("classpath:com/example/hexarch/e2e/user");
     }
 
     /**
@@ -110,7 +110,7 @@ public class KarateE2EDockerTest {
     @Karate.Test
     Karate testUser() {
         System.setProperty("karate.env", "docker");
-        return Karate.run("user").relativeTo(getClass());
+        return Karate.run("classpath:com/example/hexarch/e2e/user");
     }
 
     /*
