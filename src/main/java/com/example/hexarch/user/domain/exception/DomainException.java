@@ -1,5 +1,7 @@
 package com.example.hexarch.user.domain.exception;
 
+import com.example.hexarch.shared.domain.exception.ErrorCode;
+
 /**
  * DOMAIN LAYER - Base Exception
  *
@@ -23,14 +25,14 @@ package com.example.hexarch.user.domain.exception;
  *    - Con RuntimeException genérico, todo sería HTTP 500
  *
  * 3. CÓDIGOS DE ERROR ESTRUCTURADOS:
- *    - Cada excepción tiene un errorCode único (USER_001, USER_002, etc.)
+ *    - Cada excepción usa ErrorCode enum (type-safe)
  *    - El cliente puede identificar programáticamente el tipo de error
  *    - Útil para i18n (internacionalización) y logging
  *
  * 4. TIPO SEGURO:
  *    - El compilador ayuda a detectar qué excepciones puede lanzar un método
  *    - Podemos usar instanceof o pattern matching en los handlers
- *    - Evita errores de tipeo en mensajes de error
+ *    - ErrorCode enum evita errores de tipeo
  *
  * 5. ENCAPSULACIÓN DE LÓGICA DE NEGOCIO:
  *    - Las excepciones de dominio representan violaciones de reglas de negocio
@@ -63,25 +65,44 @@ package com.example.hexarch.user.domain.exception;
  */
 public abstract class DomainException extends RuntimeException {
 
-    private final String errorCode;
+    private final ErrorCode errorCode;
 
     /**
-     * Constructor con mensaje y código de error
+     * Constructor con ErrorCode
      *
-     * @param message mensaje descriptivo del error
-     * @param errorCode código único del error para identificación
+     * @param errorCode código de error del enum ErrorCode
      */
-    public DomainException(String message, String errorCode) {
-        super(message);
+    public DomainException(ErrorCode errorCode) {
+        super(errorCode.getMessage());
         this.errorCode = errorCode;
     }
 
     /**
-     * Obtiene el código de error
+     * Constructor con ErrorCode y mensaje formateado
+     *
+     * @param errorCode código de error del enum ErrorCode
+     * @param args argumentos para formatear el mensaje
+     */
+    public DomainException(ErrorCode errorCode, Object... args) {
+        super(errorCode.formatMessage(args));
+        this.errorCode = errorCode;
+    }
+
+    /**
+     * Obtiene el ErrorCode enum
+     *
+     * @return ErrorCode del error
+     */
+    public ErrorCode getErrorCode() {
+        return errorCode;
+    }
+
+    /**
+     * Obtiene el código de error como String
      *
      * @return código de error (ej: USER_001, USER_002)
      */
-    public String getErrorCode() {
-        return errorCode;
+    public String getErrorCodeAsString() {
+        return errorCode.getCode();
     }
 }

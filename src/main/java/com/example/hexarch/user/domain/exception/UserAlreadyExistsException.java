@@ -1,5 +1,7 @@
 package com.example.hexarch.user.domain.exception;
 
+import com.example.hexarch.shared.domain.exception.ErrorCode;
+
 /**
  * DOMAIN LAYER - Domain Exception
  *
@@ -17,6 +19,6 @@ public class UserAlreadyExistsException extends DomainException {
      * @param username nombre de usuario que ya existe
      */
     public UserAlreadyExistsException(String username) {
-        super("User with username '" + username + "' already exists", "USER_006");
+        super(ErrorCode.USER_ALREADY_EXISTS, username);
     }
 }

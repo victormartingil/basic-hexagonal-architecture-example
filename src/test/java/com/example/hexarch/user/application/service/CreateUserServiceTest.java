@@ -244,7 +244,7 @@ class CreateUserServiceTest {
         // Por lo tanto, los mocks de arriba SÍ se usan (se verifica existencia primero)
         assertThatThrownBy(() -> createUserService.execute(invalidCommand))
                 .isInstanceOf(ValidationException.class)
-                .hasMessageContaining("Username no puede estar vacío");
+                .hasMessageContaining("no puede estar vacío");
 
         // Verificar que NO se guardó ni publicó evento
         verify(userRepository, never()).save(any(User.class));
@@ -270,7 +270,7 @@ class CreateUserServiceTest {
         // WHEN & THEN
         assertThatThrownBy(() -> createUserService.execute(invalidCommand))
                 .isInstanceOf(ValidationException.class)
-                .hasMessageContaining("debe tener al menos 3 caracteres");
+                .hasMessageContaining("al menos 3 caracteres");
     }
 
     /**
@@ -292,6 +292,6 @@ class CreateUserServiceTest {
         // WHEN & THEN
         assertThatThrownBy(() -> createUserService.execute(invalidCommand))
                 .isInstanceOf(ValidationException.class)
-                .hasMessageContaining("Email no tiene un formato válido");
+                .hasMessageContaining("formato válido");
     }
 }

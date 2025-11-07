@@ -1,5 +1,6 @@
 package com.example.hexarch.user.domain.model.valueobject;
 
+import com.example.hexarch.shared.domain.exception.ErrorCode;
 import com.example.hexarch.user.domain.exception.ValidationException;
 
 /**
@@ -69,18 +70,22 @@ public record Email(String value) {
     /**
      * Valida el formato del email
      *
+     * NOTA: Ahora pasa el valor actual como parámetro para mejor debugging
+     *
      * @param value email a validar
      * @throws ValidationException si no es válido
      */
     private static void validate(String value) {
         if (value == null || value.isBlank()) {
-            throw new ValidationException("Email no puede estar vacío", "USER_004");
+            // Pasa el valor recibido (null o vacío)
+            throw new ValidationException(ErrorCode.EMAIL_EMPTY, value == null ? "null" : "\"" + value + "\"");
         }
 
         // Regex básico para validar email
         // Formato: nombre@dominio.extension
         if (!value.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")) {
-            throw new ValidationException("Email no tiene un formato válido", "USER_005");
+            // Pasa el email inválido recibido
+            throw new ValidationException(ErrorCode.EMAIL_INVALID_FORMAT, value);
         }
     }
 

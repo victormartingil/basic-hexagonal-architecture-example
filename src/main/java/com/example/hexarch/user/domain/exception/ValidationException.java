@@ -1,5 +1,7 @@
 package com.example.hexarch.user.domain.exception;
 
+import com.example.hexarch.shared.domain.exception.ErrorCode;
+
 /**
  * DOMAIN LAYER - Domain Exception
  *
@@ -19,13 +21,13 @@ package com.example.hexarch.user.domain.exception;
  *    - RuntimeException genérico → HTTP 500 Internal Server Error
  *    - El cliente sabe que debe corregir los datos de entrada
  *
- * 2. CÓDIGO DE ERROR ESPECÍFICO:
- *    - Cada validación tiene su código (USER_001, USER_002, etc.)
+ * 2. CÓDIGO DE ERROR ESPECÍFICO CON ENUM:
+ *    - Cada validación usa ErrorCode enum (type-safe)
  *    - El cliente puede mostrar mensajes personalizados por código
  *    - Útil para internacionalización (i18n)
  *
  * 3. EXPRESIVIDAD:
- *    - throw new ValidationException("Username muy corto", "USER_002");
+ *    - throw new ValidationException(ErrorCode.USERNAME_TOO_SHORT);
  *      vs throw new RuntimeException("Username muy corto");
  *    - Comunica claramente que es un error de validación
  *
@@ -37,14 +39,14 @@ package com.example.hexarch.user.domain.exception;
  *
  * // En el Value Object
  * if (value == null || value.isBlank()) {
- *     throw new ValidationException("Email no puede estar vacío", "USER_004");
+ *     throw new ValidationException(ErrorCode.EMAIL_EMPTY);
  * }
  *
  * // En el GlobalExceptionHandler
  * @ExceptionHandler(ValidationException.class)
  * public ResponseEntity<ErrorResponse> handle(ValidationException ex) {
  *     return ResponseEntity.status(400).body(
- *         new ErrorResponse(400, "Validation Error", ex.getMessage(), ex.getErrorCode(), ...)
+ *         new ErrorResponse(400, "Validation Error", ex.getMessage(), ex.getErrorCode().getCode(), ...)
  *     );
  * }
  *
@@ -59,12 +61,21 @@ package com.example.hexarch.user.domain.exception;
 public class ValidationException extends DomainException {
 
     /**
-     * Constructor con mensaje y código de error
+     * Constructor con ErrorCode
      *
-     * @param message descripción del error
-     * @param errorCode código único del error (ej: USER_001)
+     * @param errorCode código de error del enum ErrorCode
      */
-    public ValidationException(String message, String errorCode) {
-        super(message, errorCode);
+    public ValidationException(ErrorCode errorCode) {
+        super(errorCode);
+    }
+
+    /**
+     * Constructor con ErrorCode y argumentos para formatear mensaje
+     *
+     * @param errorCode código de error del enum ErrorCode
+     * @param args argumentos para formatear el mensaje
+     */
+    public ValidationException(ErrorCode errorCode, Object... args) {
+        super(errorCode, args);
     }
 }

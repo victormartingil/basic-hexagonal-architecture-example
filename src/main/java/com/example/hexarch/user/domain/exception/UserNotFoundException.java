@@ -1,5 +1,7 @@
 package com.example.hexarch.user.domain.exception;
 
+import com.example.hexarch.shared.domain.exception.ErrorCode;
+
 import java.util.UUID;
 
 /**
@@ -14,17 +16,15 @@ import java.util.UUID;
  * - Esta excepción se mapea a HTTP 404 NOT FOUND en GlobalExceptionHandler
  *
  * ERROR CODE:
- * - USER_404: Usuario no encontrado
+ * - ErrorCode.USER_NOT_FOUND: Usuario no encontrado
  */
 public class UserNotFoundException extends DomainException {
 
-    private static final String ERROR_CODE = "USER_404";
-
     public UserNotFoundException(UUID userId) {
-        super(String.format("User with ID '%s' not found", userId), ERROR_CODE);
+        super(ErrorCode.USER_NOT_FOUND, userId);
     }
 
     public UserNotFoundException(String username) {
-        super(String.format("User with username '%s' not found", username), ERROR_CODE);
+        super(ErrorCode.USER_NOT_FOUND, username);
     }
 }

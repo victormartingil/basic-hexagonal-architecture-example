@@ -1,5 +1,6 @@
 package com.example.hexarch.shared.infrastructure.exception;
 
+import com.example.hexarch.shared.domain.exception.ErrorCode;
 import com.example.hexarch.user.domain.exception.DomainException;
 import com.example.hexarch.user.domain.exception.UserAlreadyExistsException;
 import com.example.hexarch.user.domain.exception.UserNotFoundException;
@@ -65,7 +66,7 @@ public class GlobalExceptionHandler {
             HttpStatus.BAD_REQUEST.value(),      // 400
             "Validation Error",                   // error
             ex.getMessage(),                      // message
-            ex.getErrorCode(),                    // errorCode (ej: USER_001)
+            ex.getErrorCode().getCode(),          // errorCode (ej: USER_001) - usa enum
             LocalDateTime.now(),                  // timestamp
             null                                  // details (no hay detalles adicionales)
         );
@@ -91,7 +92,7 @@ public class GlobalExceptionHandler {
             HttpStatus.CONFLICT.value(),          // 409
             "Conflict",                           // error
             ex.getMessage(),                      // message
-            ex.getErrorCode(),                    // errorCode (ej: USER_006)
+            ex.getErrorCode().getCode(),          // errorCode (ej: USER_006) - usa enum
             LocalDateTime.now(),                  // timestamp
             null                                  // details
         );
@@ -117,7 +118,7 @@ public class GlobalExceptionHandler {
             HttpStatus.NOT_FOUND.value(),         // 404
             "Not Found",                          // error
             ex.getMessage(),                      // message
-            ex.getErrorCode(),                    // errorCode (ej: USER_404)
+            ex.getErrorCode().getCode(),          // errorCode (ej: USER_404) - usa enum
             LocalDateTime.now(),                  // timestamp
             null                                  // details
         );
@@ -154,7 +155,7 @@ public class GlobalExceptionHandler {
             HttpStatus.BAD_REQUEST.value(),       // 400
             "Validation Error",                   // error
             "Los datos de entrada no son válidos", // message
-            "VALIDATION_001",                     // errorCode
+            ErrorCode.BEAN_VALIDATION_ERROR.getCode(), // errorCode - usa enum
             LocalDateTime.now(),                  // timestamp
             fieldErrors                           // details (mapa de errores por campo)
         );
@@ -191,7 +192,7 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST.value(),       // 400
                 "Type Mismatch",                      // error
                 message,                              // message
-                "TYPE_MISMATCH_001",                  // errorCode
+                ErrorCode.TYPE_MISMATCH.getCode(),    // errorCode - usa enum
                 LocalDateTime.now(),                  // timestamp
                 null                                  // details
         );
@@ -215,7 +216,7 @@ public class GlobalExceptionHandler {
             HttpStatus.INTERNAL_SERVER_ERROR.value(),  // 500
             "Domain Error",                            // error
             ex.getMessage(),                           // message
-            ex.getErrorCode(),                         // errorCode
+            ex.getErrorCode().getCode(),               // errorCode - usa enum
             LocalDateTime.now(),                       // timestamp
             null                                       // details
         );
@@ -244,7 +245,7 @@ public class GlobalExceptionHandler {
             HttpStatus.INTERNAL_SERVER_ERROR.value(),  // 500
             "Internal Server Error",                   // error
             "Ha ocurrido un error inesperado. Por favor, contacte al administrador.", // message
-            "INTERNAL_001",                           // errorCode
+            ErrorCode.INTERNAL_ERROR.getCode(),        // errorCode - usa enum
             LocalDateTime.now(),                      // timestamp
             null                                      // details (no exponemos detalles por seguridad)
         );

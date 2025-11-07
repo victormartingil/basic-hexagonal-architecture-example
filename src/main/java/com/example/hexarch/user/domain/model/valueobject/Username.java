@@ -1,5 +1,6 @@
 package com.example.hexarch.user.domain.model.valueobject;
 
+import com.example.hexarch.shared.domain.exception.ErrorCode;
 import com.example.hexarch.user.domain.exception.ValidationException;
 
 /**
@@ -61,24 +62,29 @@ public record Username(String value) {
     /**
      * Valida las reglas del username
      *
+     * NOTA: Ahora pasa el valor actual como parámetro para mejor debugging
+     *
      * @param value username a validar
      * @throws ValidationException si no cumple las reglas
      */
     private static void validate(String value) {
         if (value == null || value.isBlank()) {
-            throw new ValidationException("Username no puede estar vacío", "USER_001");
+            // Pasa el valor recibido (null o vacío)
+            throw new ValidationException(ErrorCode.USERNAME_EMPTY, value == null ? "null" : "\"" + value + "\"");
         }
         if (value.length() < 3) {
-            throw new ValidationException("Username debe tener al menos 3 caracteres", "USER_002");
+            // Pasa el username y su longitud actual
+            throw new ValidationException(ErrorCode.USERNAME_TOO_SHORT, value, value.length());
         }
         if (value.length() > 50) {
-            throw new ValidationException("Username no puede tener más de 50 caracteres", "USER_003");
+            // Pasa el username y su longitud actual
+            throw new ValidationException(ErrorCode.USERNAME_TOO_LONG, value, value.length());
         }
 
         // OPCIONAL: Podrías agregar más validaciones
         // Por ejemplo, solo alfanumérico:
         // if (!value.matches("^[a-zA-Z0-9_]+$")) {
-        //     throw new ValidationException("Username solo puede contener letras, números y guiones bajos", "USER_007");
+        //     throw new ValidationException(ErrorCode.USERNAME_INVALID_FORMAT, value);
         // }
     }
 

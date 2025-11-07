@@ -1,5 +1,6 @@
 package com.example.hexarch.shared.infrastructure.exception;
 
+import com.example.hexarch.shared.domain.exception.ErrorCode;
 import com.example.hexarch.user.domain.exception.DomainException;
 import com.example.hexarch.user.domain.exception.UserAlreadyExistsException;
 import com.example.hexarch.user.domain.exception.UserNotFoundException;
@@ -39,8 +40,8 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("Should handle ValidationException with 400 status")
     void shouldHandleValidationException() {
-        // GIVEN
-        ValidationException ex = new ValidationException("Invalid input", "VAL_001");
+        // GIVEN - Ahora con parámetro para mejor contexto
+        ValidationException ex = new ValidationException(ErrorCode.USERNAME_EMPTY, "null");
 
         // WHEN
         ResponseEntity<ErrorResponse> response = handler.handleValidationException(ex);
@@ -50,8 +51,8 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().status()).isEqualTo(400);
         assertThat(response.getBody().error()).isEqualTo("Validation Error");
-        assertThat(response.getBody().message()).isEqualTo("Invalid input");
-        assertThat(response.getBody().errorCode()).isEqualTo("VAL_001");
+        assertThat(response.getBody().message()).isEqualTo("Username no puede estar vacío (recibido: 'null')");
+        assertThat(response.getBody().errorCode()).isEqualTo("USER_001");
     }
 
     @Test
@@ -119,8 +120,8 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("Should handle DomainException with 500 status")
     void shouldHandleDomainException() {
-        // GIVEN - Usar ValidationException que es concreta
-        ValidationException ex = new ValidationException("Domain error occurred", "DOMAIN_001");
+        // GIVEN - Usar ValidationException que es concreta, ahora con parámetro
+        ValidationException ex = new ValidationException(ErrorCode.EMAIL_EMPTY, "\"\"");
 
         // WHEN
         ResponseEntity<ErrorResponse> response = handler.handleValidationException(ex);
@@ -130,8 +131,8 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().status()).isEqualTo(400);
         assertThat(response.getBody().error()).isEqualTo("Validation Error");
-        assertThat(response.getBody().message()).isEqualTo("Domain error occurred");
-        assertThat(response.getBody().errorCode()).isEqualTo("DOMAIN_001");
+        assertThat(response.getBody().message()).isEqualTo("Email no puede estar vacío (recibido: '\"\"')");
+        assertThat(response.getBody().errorCode()).isEqualTo("USER_004");
     }
 
     @Test
@@ -156,8 +157,8 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("Should include timestamp in all error responses")
     void shouldIncludeTimestampInErrorResponses() {
-        // GIVEN
-        ValidationException ex = new ValidationException("Test error", "TEST_001");
+        // GIVEN - Con parámetros: username y longitud
+        ValidationException ex = new ValidationException(ErrorCode.USERNAME_TOO_SHORT, "ab", 2);
 
         // WHEN
         ResponseEntity<ErrorResponse> response = handler.handleValidationException(ex);
@@ -165,5 +166,6 @@ class GlobalExceptionHandlerTest {
         // THEN
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().timestamp()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo("Username 'ab' debe tener al menos 3 caracteres (actual: 2)");
     }
 }
