@@ -5,18 +5,8 @@ import com.example.hexarch.shared.domain.exception.ErrorCode;
 import java.util.UUID;
 
 /**
- * DOMAIN LAYER - Domain Exception
- *
- * Se lanza cuando se intenta buscar un usuario que no existe.
- *
- * NOMENCLATURA:
- * - {Entity}{Reason}Exception
- *
- * HTTP MAPPING:
- * - Esta excepción se mapea a HTTP 404 NOT FOUND en GlobalExceptionHandler
- *
- * ERROR CODE:
- * - ErrorCode.USER_NOT_FOUND: Usuario no encontrado
+ * Exception thrown when a user is not found.
+ * Mapped to HTTP 404 Not Found.
  */
 public class UserNotFoundException extends DomainException {
 
